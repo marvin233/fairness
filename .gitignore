@@ -1,6 +1,6 @@
-*.pyc
-.ipynb_checkpoints/
-.vscode/
+.idea
 .DS_Store
-/results
-/backup
+models
+results
+result
+rq1

@@ -11,7 +11,7 @@ def credit_data():
     Y = []
     i = 0
 
-    with open("../datasets/credit_sample", "r") as ins:
+    with open("../datasets/credit", "r") as ins:
         for line in ins:
             line = line.strip()
             line1 = line.split(',')
@@ -30,5 +30,4 @@ def credit_data():
 
     input_shape = (None, 20)
     nb_classes = 2
-
     return X, Y, input_shape, nb_classes

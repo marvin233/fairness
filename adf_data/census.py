@@ -35,5 +35,4 @@ def census_data():
 
     input_shape = (None, 13)
     nb_classes = 2
-
     return X, Y, input_shape, nb_classes

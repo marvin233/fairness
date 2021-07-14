@@ -11,13 +11,14 @@ else:
 from z3 import *
 import os
 import copy
-
-from adf_utils.config import census, credit, bank
 from adf_baseline.lime import lime_tabular
 from adf_model.tutorial_models import dnn
 from adf_data.census import census_data
 from adf_data.credit import credit_data
 from adf_data.bank import bank_data
+from adf_data.execution import execution_data
+from adf_data.compas import compas_data
+from adf_utils.config import census, credit, bank, execution, compas
 from adf_utils.utils_tf import model_argmax
 from adf_tutorial.utils import cluster
 
@@ -203,8 +204,8 @@ def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, limit
     :param limit: the maximum number of test case
     :param new_input: our new input approach 
     """
-    data = {"census":census_data, "credit":credit_data, "bank":bank_data}
-    data_config = {"census":census, "credit":credit, "bank":bank}
+    data = {"census":census_data, "credit":credit_data, "bank":bank_data, "execution":execution_data, "compas":compas_data}
+    data_config = {"census":census, "credit":credit, "bank":bank, "execution":execution, "compas":compas}
 
     # the rank for priority queue, rank1 is for seed inputs, rank2 for local, rank3 for global
     rank1 = 5
@@ -224,7 +225,7 @@ def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, limit
     config.gpu_options.per_process_gpu_memory_fraction = 0.8
     sess = tf.Session(config=config)
     saver = tf.train.Saver()
-    model_path = model_path + dataset + "/test.model"
+    model_path = model_path + dataset +"/"+ str(FLAGS.sens_param) +"/test.model"
     saver.restore(sess, model_path)
 
     # store the result of fairness testing
@@ -250,11 +251,18 @@ def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, limit
     visited_path = []
     l_count = 0
     g_count = 0
+    found_number = 0
     while len(tot_inputs) < limit and q.qsize() != 0:
         t = q.get()
         t_rank = t[0]
         t = np.array(t[1])
         found = check_for_error_condition(data_config[dataset], sess, x, preds, t, sensitive_param)
+        if found:
+            found_number += 1
+        # RQ1
+        # continue
+
+        ###
         p = getPath(X, sess, x, preds, t, data_config[dataset])
         temp = copy.deepcopy(t.tolist())
         temp = temp[:sensitive_param - 1] + temp[sensitive_param:]
@@ -325,7 +333,10 @@ def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, limit
                     q.put((rank3-r, input))
 
             prefix_pred = prefix_pred + [c]
-        
+
+    # RQ1
+    # print(limit, found_number)
+    # exit()
     # create the folder for storing the fairness testing result
     if not os.path.exists('../results/'):
         os.makedirs('../results/')
@@ -349,8 +360,8 @@ def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, limit
 
     # print the overview information of result
     print("Total Inputs are " + str(len(tot_inputs)))
-    print("Total discriminatory inputs of global search - " + str(len(global_disc_inputs)), g_count)
-    print("Total discriminatory inputs of local search - " + str(len(local_disc_inputs)), l_count)
+    print("Total discriminatory inputs of global search - " + str(len(global_disc_inputs)))
+    print("Total discriminatory inputs of local search - " + str(len(local_disc_inputs)))
 
 def main(argv=None):
     symbolic_generation(dataset=FLAGS.dataset,
@@ -360,12 +371,15 @@ def main(argv=None):
                         limit=FLAGS.sample_limit,
                         new_input=FLAGS.new_input)
 
+# census: 1 age, 8 race, 9 sex
+# bank: 1 age
+# compas: 2 age, 3 race
 if __name__ == '__main__':
-    flags.DEFINE_string('dataset', 'census', 'the name of dataset')
-    flags.DEFINE_integer('sens_param', 9, 'sensitive index, index start from 1, 9 for gender, 8 for race.')
+    flags.DEFINE_string('dataset', 'compas', 'the name of dataset')
+    flags.DEFINE_integer('sens_param', 3, 'sensitive index, index start from 1, 9 for gender, 8 for race.')
     flags.DEFINE_string('model_path', '../models/', 'the path for testing model')
-    flags.DEFINE_integer('sample_limit', 100, 'number of samples to search')
+    flags.DEFINE_integer('sample_limit', 1000, 'number of samples to search')
     flags.DEFINE_integer('cluster_num', 4, 'the number of clusters to form as well as the number of centroids to generate')
-    flags.DEFINE_boolean('new_input', False, 'our new input approach')
+    flags.DEFINE_boolean('new_input', True, 'our new input approach')
 
     tf.app.run()

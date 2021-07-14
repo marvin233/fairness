@@ -2,6 +2,7 @@ import sys
 sys.path.append("../")
 from sklearn.cluster import KMeans
 from sklearn.externals import joblib
+# import joblib
 import os
 import tensorflow as tf
 from tensorflow.python.platform import flags
@@ -9,11 +10,13 @@ from tensorflow.python.platform import flags
 from adf_data.census import census_data
 from adf_data.credit import credit_data
 from adf_data.bank import bank_data
+from adf_data.execution import execution_data
+from adf_data.compas import compas_data
 from adf_utils.utils_tf import model_loss
 
 FLAGS = flags.FLAGS
 
-datasets_dict = {'census':census_data, 'credit':credit_data, 'bank': bank_data}
+datasets_dict = {'census':census_data, 'credit':credit_data, 'bank': bank_data, 'execution': execution_data, 'compas': compas_data}
 
 def cluster(dataset, cluster_num=4):
     """

@@ -10,15 +10,18 @@ from scipy.optimize import basinhopping
 from adf_data.census import census_data
 from adf_data.credit import credit_data
 from adf_data.bank import bank_data
+from adf_data.execution import execution_data
+from adf_data.compas import compas_data
 from adf_model.tutorial_models import dnn
 from adf_utils.utils_tf import model_prediction, model_argmax
-from adf_utils.config import census, credit, bank
+from adf_utils.config import census, credit, bank, execution, compas
 from adf_tutorial.utils import cluster, gradient_graph
 
 FLAGS = flags.FLAGS
 
 # step size of perturbation
 perturbation_size = 1
+
 
 def check_for_error_condition(conf, sess, x, preds, t, sens):
     """
@@ -44,6 +47,7 @@ def check_for_error_condition(conf, sess, x, preds, t, sens):
                 return True
     return False
 
+
 def seed_test_input(clusters, limit):
     """
     Select the seed inputs for fairness testing
@@ -67,6 +71,7 @@ def seed_test_input(clusters, limit):
         i += 1
     return np.array(rows)
 
+
 def clip(input, conf):
     """
     Clip the generating instance with each feature to make sure it is valid
@@ -78,6 +83,7 @@ def clip(input, conf):
         input[i] = max(input[i], conf.input_bounds[i][0])
         input[i] = min(input[i], conf.input_bounds[i][1])
     return input
+
 
 class Local_Perturbation(object):
     """
@@ -143,6 +149,7 @@ class Local_Perturbation(object):
 
         return x
 
+
 def dnn_fair_testing(dataset, sensitive_param, model_path, cluster_num, max_global, max_local, max_iter, new_input):
     """
     The implementation of ADF
@@ -156,8 +163,8 @@ def dnn_fair_testing(dataset, sensitive_param, model_path, cluster_num, max_glob
     :param max_iter: the maximum iteration of global perturbation
     :param new_input: our new input approach 
     """
-    data = {"census":census_data, "credit":credit_data, "bank":bank_data}
-    data_config = {"census":census, "credit":credit, "bank":bank}
+    data = {"census":census_data, "credit":credit_data, "bank":bank_data, 'execution':execution_data, 'compas':compas_data}
+    data_config = {"census":census, "credit":credit, "bank":bank, 'execution':execution, 'compas':compas}
 
     # prepare the testing data and model
     X, Y, input_shape, nb_classes = data[dataset]()
@@ -170,7 +177,7 @@ def dnn_fair_testing(dataset, sensitive_param, model_path, cluster_num, max_glob
     model = dnn(input_shape, nb_classes)
     preds = model(x)
     saver = tf.train.Saver()
-    model_path = model_path + dataset + "/test.model"
+    model_path = model_path + dataset +"/"+ str(FLAGS.sens_param) + "/test.model"
     saver.restore(sess, model_path)
     
     # construct the gradient graph
@@ -178,7 +185,7 @@ def dnn_fair_testing(dataset, sensitive_param, model_path, cluster_num, max_glob
 
     # build the clustering model
     clf = cluster(dataset, cluster_num)
-    clusters = [np.where(clf.labels_==i) for i in range(cluster_num)]
+    clusters = [np.where(clf.labels_ == i) for i in range(cluster_num)]
 
     # store the result of fairness testing
     tot_inputs = set()
@@ -324,8 +331,9 @@ def dnn_fair_testing(dataset, sensitive_param, model_path, cluster_num, max_glob
     # print the overview information of result
     print("Total Inputs are " + str(len(tot_inputs)))
     print("Total discriminatory inputs of global search- " + str(len(global_disc_inputs)))
-    print("Total missing inputs of global search- " + str(len(global_miss)))
+    # print("Total missing inputs of global search- " + str(len(global_miss)))
     print("Total discriminatory inputs of local search- " + str(len(local_disc_inputs)))
+
 
 def main(argv=None):
     dnn_fair_testing(dataset = FLAGS.dataset,
@@ -337,14 +345,21 @@ def main(argv=None):
                      max_iter = FLAGS.max_iter,
                      new_input = FLAGS.new_input)
 
+
+# census: 1 age, 8 race, 9 sex
+# bank: 1 age
+# compas: 2 age, 3 race
 if __name__ == '__main__':
-    flags.DEFINE_string("dataset", "census", "the name of dataset")
-    flags.DEFINE_integer('sens_param', 9, 'sensitive index, index start from 1, 9 for gender, 8 for race')
+    flags.DEFINE_string("dataset", "compas", "the name of dataset")
+    flags.DEFINE_integer('sens_param', 3, 'sensitive index, index start from 1, 9 for gender, 8 for race')
     flags.DEFINE_string('model_path', '../models/', 'the path for testing model')
     flags.DEFINE_integer('cluster_num', 4, 'the number of clusters to form as well as the number of centroids to generate')
-    flags.DEFINE_integer('max_global', 100, 'maximum number of samples for global search')
+    flags.DEFINE_integer('max_global', 1000, 'maximum number of samples for global search')
     flags.DEFINE_integer('max_local', 100, 'maximum number of samples for local search')
     flags.DEFINE_integer('max_iter', 10, 'maximum iteration of global perturbation')
-    flags.DEFINE_boolean('new_input', True, 'our new input approach')
+    flags.DEFINE_boolean('new_input', False, 'our new input approach')
 
     tf.app.run()
+
+# compas 3 True
+# compas 3 False

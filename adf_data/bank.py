@@ -29,5 +29,4 @@ def bank_data():
 
     input_shape = (None, 16)
     nb_classes = 2
-
     return X, Y, input_shape, nb_classes

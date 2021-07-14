@@ -12,11 +12,15 @@ import copy
 from adf_data.census import census_data
 from adf_data.credit import credit_data
 from adf_data.bank import bank_data
-from adf_utils.config import census, credit, bank
+from adf_data.execution import execution_data
+from adf_data.compas import compas_data
+from adf_utils.config import census, credit, bank, execution, compas
 from adf_model.tutorial_models import dnn
 from adf_utils.utils_tf import model_argmax
 
+
 FLAGS = flags.FLAGS
+
 
 class Local_Perturbation(object):
     """
@@ -128,6 +132,7 @@ class Global_Discovery(object):
             x[i] = random.randint(self.conf.input_bounds[i][0], self.conf.input_bounds[i][1])
         return x
 
+
 def check_for_error_condition(conf, sess, x, preds, t, sens):
     """
     Check whether the test case is an individual discriminatory instance
@@ -152,6 +157,7 @@ def check_for_error_condition(conf, sess, x, preds, t, sens):
                 return val
     return t[sens - 1]
 
+
 def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_size, new_input):
     """
     The implementation of AEQUITAS_Fully_Connected
@@ -164,8 +170,8 @@ def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_s
     :param new_input: our new input approach 
     :return:
     """
-    data = {"census": census_data, "credit": credit_data, "bank": bank_data}
-    data_config = {"census": census, "credit": credit, "bank": bank}
+    data = {"census": census_data, "credit": credit_data, "bank": bank_data, "execution": execution_data, "compas":compas_data}
+    data_config = {"census": census, "credit": credit, "bank": bank, "execution": execution, "compas":compas}
     params = data_config[dataset].params
 
     # hyper-parameters for initial probabilities of directions
@@ -188,7 +194,7 @@ def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_s
     config.gpu_options.per_process_gpu_memory_fraction = 0.8
     sess = tf.Session(config=config)
     saver = tf.train.Saver()
-    saver.restore(sess, model_path)
+    saver.restore(sess, model_path+FLAGS.dataset+"/"+ str(FLAGS.sens_param) +"/test.model")
 
     # store the result of fairness testing
     global_disc_inputs = set()
@@ -206,6 +212,10 @@ def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_s
         initial_input = [2, 24, 2, 2, 37, 0, 1, 2, 1, 0, 4, 2, 2, 2, 1, 1, 2, 1, 0, 0]
     elif dataset == "bank":
         initial_input = [3, 11, 2, 0, 0, 5, 1, 0, 0, 5, 4, 40, 1, 1, 0, 0]
+    elif dataset == "execution":
+        initial_input = [2, 0, 0, 0, 0, 0, 0, 1, 1, 1]
+    elif dataset == "compas":
+        initial_input = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0]
     minimizer = {"method": "L-BFGS-B"}
 
     def evaluate_local(inp):
@@ -247,13 +257,13 @@ def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_s
         temp = temp[:sensitive_param - 1] + temp[sensitive_param:]
         tot_inputs.add(tuple(temp))
         result = check_for_error_condition(data_config[dataset], sess, x, preds, inp, sensitive_param)
-
         ##marvin adds##
         if result == inp[sensitive_param - 1] and (tuple(temp) not in global_miss):
             global_miss_list.append(temp)
             global_miss.add(tuple(temp))
         ###############
-        
+        # RQ1
+        # continue
         # if get an individual discriminatory instance
         if result != inp[sensitive_param - 1] and (tuple(temp) not in global_disc_inputs) and (
             tuple(temp) not in local_disc_inputs):
@@ -267,7 +277,11 @@ def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_s
             print(len(global_disc_inputs), len(local_disc_inputs),
                   "Percentage discriminatory inputs of local search- " + str(
                       float(len(local_disc_inputs)) / float(len(tot_inputs)) * 100))
-        
+
+    # RQ1
+    # print(max_global, max_global - len(global_miss_list))
+    # exit()
+
     # create the folder for storing the fairness testing result
     if not os.path.exists('../results/'):
         os.makedirs('../results/')
@@ -300,13 +314,16 @@ def main(argv=None):
              step_size = FLAGS.step_size,
              new_input = FLAGS.new_input)
 
+# census: 1 age, 8 race, 9 sex
+# bank: 1 age
+# compas: 2 age, 3 race
 if __name__ == '__main__':
-    flags.DEFINE_string("dataset", "census", "the name of dataset")
-    flags.DEFINE_integer('sens_param', 9, 'sensitive index, index start from 1, 9 for gender, 8 for race')
-    flags.DEFINE_string('model_path', '../models/census/test.model', 'the path for testing model')
-    flags.DEFINE_integer('max_global', 100, 'number of maximum samples for global search')
+    flags.DEFINE_string("dataset", "compas", "the name of dataset")
+    flags.DEFINE_integer('sens_param', 3, 'sensitive index, index start from 1, 9 for gender, 8 for race')
+    flags.DEFINE_string('model_path', '../models/', 'the path for testing model')
+    flags.DEFINE_integer('max_global', 1000, 'number of maximum samples for global search')
     flags.DEFINE_integer('max_local', 100, 'number of maximum samples for local search')
     flags.DEFINE_float('step_size', 1.0, 'step size for perturbation')
-    flags.DEFINE_boolean('new_input', False, 'our new input approach')
+    flags.DEFINE_boolean('new_input', True, 'our new input approach')
 
     tf.app.run()

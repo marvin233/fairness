@@ -11,11 +11,14 @@ from tensorflow.python.platform import flags
 from adf_data.census import census_data
 from adf_data.credit import credit_data
 from adf_data.bank import bank_data
+from adf_data.execution import execution_data
+from adf_data.compas import compas_data
+from adf_utils.config import census, credit, bank, execution, compas
 from adf_model.tutorial_models import dnn
 from adf_utils.utils_tf import model_argmax
-from adf_utils.config import census, credit, bank
 
 FLAGS = flags.FLAGS
+
 
 def check_for_error_condition(conf, sess, x, preds, t, sens):
     """
@@ -54,8 +57,8 @@ def dnn_init(dataset, sensitive_param, model_path, max_global, max_local, max_it
     :param max_local: the maximum number of samples for local search
     :param max_iter: the maximum iteration of global perturbation
     """
-    data = {"census":census_data, "credit":credit_data, "bank":bank_data}
-    data_config = {"census":census, "credit":credit, "bank":bank}
+    data = {"census":census_data, "credit":credit_data, "bank":bank_data, "execution": execution_data, "compas": compas_data}
+    data_config = {"census":census, "credit":credit, "bank":bank, "execution":execution, "compas":compas}
 
     # prepare the testing data and model
     X, Y, input_shape, nb_classes = data[dataset]()
@@ -68,16 +71,15 @@ def dnn_init(dataset, sensitive_param, model_path, max_global, max_local, max_it
     model = dnn(input_shape, nb_classes)
     preds = model(x)
     saver = tf.train.Saver()
-    orgmodel_path = model_path + dataset + "/test.model"
+    orgmodel_path = model_path + dataset +"/"+ str(FLAGS.sens_param) +"/test.model"
     saver.restore(sess, orgmodel_path)
-     
+
     invert_sess = tf.Session(config=config)
     invert_model = dnn(input_shape, nb_classes)
     invert_preds = invert_model(x)
     invert_saver = tf.train.Saver()
-    invert_path = model_path + dataset + "/invert/test.model"
+    invert_path = model_path + dataset+"/"+ str(FLAGS.sens_param) + "/invert/test.model"
     invert_saver.restore(invert_sess, invert_path)
-    
     total_init = 0
     init = set()
     init_list = []
@@ -95,6 +97,17 @@ def dnn_init(dataset, sensitive_param, model_path, max_global, max_local, max_it
                     init.add(tuple(temp))
                     init_list.append(temp)
                     init_index.append(i)
+
+    if FLAGS.shap:
+        shap.initjs()
+        # explainer = shap.LinearExplainer(model)  # 初始化解释器
+        explainer = shap.LinearExplainer(model, X)  # 初始化解释器
+        feature_name = data_config[FLAGS.dataset].feature_name
+        idi = init_list
+        shap_values = explainer.shap_values(idi)
+        shap.summary_plot(shap_values, idi)
+        # shap.summary_plot(shap_values[0])
+        exit()
 
     # create the folder for storing the fairness testing result
     if not os.path.exists('../results/'):
@@ -121,12 +134,18 @@ def main(argv=None):
              max_local=FLAGS.max_local,
              max_iter = FLAGS.max_iter)
 
+# census: 1 age, 8 race, 9 sex
+# bank: 1 age
+# compas: 2 age, 3 race
+
+
 if __name__ == '__main__':
     flags.DEFINE_string("dataset", "census", "the name of dataset")
-    flags.DEFINE_integer('sens_param', 9, 'sensitive index, index start from 1, 9 for gender, 8 for race')
+    flags.DEFINE_integer('sens_param', 1, 'sensitive index, index start from 1, 9 for gender, 8 for race')
     flags.DEFINE_string('model_path', '../models/', 'the path for testing model')
-    flags.DEFINE_integer('max_global', 1000, 'maximum number of samples for global search')
-    flags.DEFINE_integer('max_local', 1000, 'maximum number of samples for local search')
+    flags.DEFINE_integer('max_global', 10, 'maximum number of samples for global search')
+    flags.DEFINE_integer('max_local', 10, 'maximum number of samples for local search')
     flags.DEFINE_integer('max_iter', 10, 'maximum iteration of global perturbation')
+    flags.DEFINE_boolean('shap', True, 'shap value')
 
     tf.app.run()

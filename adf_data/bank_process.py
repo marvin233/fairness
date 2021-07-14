@@ -47,5 +47,4 @@ with open("../datasets/bank_raw/bank-full.csv", "r") as ins:
         features[16] = output.index(features[16].split('\"')[1])
         data.append(features)
 data = np.asarray(data)
-
 np.savetxt("../datasets/bank", data, fmt="%d",delimiter=",")

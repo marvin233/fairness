@@ -13,18 +13,50 @@ from tensorflow.python.platform import flags
 from adf_data.census import census_data
 from adf_data.bank import bank_data
 from adf_data.credit import credit_data
+from adf_data.execution import execution_data
+from adf_data.compas import compas_data
 from adf_utils.utils_tf import model_train, model_eval
 from adf_model.tutorial_models import dnn
+from adf_utils.config import census, credit, bank, execution, compas
+import random
 
 FLAGS = flags.FLAGS
+random.seed(0)
+
+
+def generate_random(x, input_bounds):
+    if x == input_bounds[0]:
+        return random.randint(input_bounds[0]+1, input_bounds[1])
+    elif x == input_bounds[1]:
+        return random.randint(input_bounds[0], input_bounds[1]-1)
+    else:
+        if random.randint(0, 1) == 0:
+            return random.randint(input_bounds[0], x-1)
+        else:
+            return random.randint(x+1, input_bounds[1])
+
 
 def invert_sensitive(x, sens_index):
-    x = df.DataFrame(x)
     sens_index = sens_index - 1
+    x = df.DataFrame(x)
+    input_bounds = None
+    if FLAGS.dataset == 'census':
+        input_bounds = census.input_bounds
+    elif FLAGS.dataset == 'bank':
+        input_bounds = bank.input_bounds
+    elif FLAGS.dataset == 'credit':
+        input_bounds = credit.input_bounds
+    elif FLAGS.dataset == 'execution':
+        input_bounds = execution.input_bounds
+    elif FLAGS.dataset == 'compas':
+        input_bounds = compas.input_bounds
+    input_bounds = input_bounds[sens_index]
     x.iloc[:, sens_index] = x.iloc[:, sens_index].astype('int') # only for binary feature
-    x.iloc[:, sens_index] ^= 1
+    for i in range(len(x)):
+        x.iloc[i, sens_index] = generate_random(x.iloc[i, sens_index], input_bounds)
     x = np.array(x)
     return x 
+
 
 def training(dataset, sens_param, model_path, nb_epochs, batch_size, learning_rate, invert):
     """
@@ -32,14 +64,14 @@ def training(dataset, sens_param, model_path, nb_epochs, batch_size, learning_ra
     :param dataset: the name of testing dataset
     :param model_path: the path to save trained model
     """
-    data = {"census": census_data, "credit": credit_data, "bank": bank_data}
-    train_dir = model_path + dataset + "/"
+    data = {"census": census_data, "credit": credit_data, "bank": bank_data, "execution": execution_data, "compas":compas_data}
+    train_dir = model_path + dataset + "/" + str(FLAGS.sens_param) + "/"
 
     # prepare the data and model
     X, Y, input_shape, nb_classes = data[dataset]()
     if invert:
         X = invert_sensitive(X, sens_param)
-        train_dir = model_path + dataset + "/invert/"
+        train_dir = model_path  + dataset +"/"+ str(FLAGS.sens_param) +"/invert/"
     tf.set_random_seed(1234)
     config = tf.ConfigProto()
     config.gpu_options.per_process_gpu_memory_fraction = 0.8
@@ -69,6 +101,7 @@ def training(dataset, sens_param, model_path, nb_epochs, batch_size, learning_ra
     accuracy = model_eval(sess, x, y, preds, X, Y, args=eval_params)
     print('Test accuracy on legitimate test examples: {0}'.format(accuracy))
 
+
 def main(argv=None):
     training(dataset = FLAGS.dataset,
              sens_param = FLAGS.sens_param,
@@ -85,11 +118,12 @@ def main(argv=None):
              learning_rate = FLAGS.learning_rate,
              invert = True)
 
+
 if __name__ == '__main__':
-    flags.DEFINE_string("dataset", "census", "the name of dataset")
-    flags.DEFINE_integer('sens_param', 9, 'sensitive index, index start from 1, 9 for gender, 8 for race')
+    flags.DEFINE_string("dataset", "compas", "the name of dataset")
+    flags.DEFINE_integer('sens_param', 3, 'sensitive index, index start from 1, 9 for gender, 8 for race')
     flags.DEFINE_string("model_path", "../models/", "the name of path for saving model")
-    flags.DEFINE_integer('nb_epochs', 1000, 'Number of epochs to train model')
+    flags.DEFINE_integer('nb_epochs', 100, 'Number of epochs to train model')
     flags.DEFINE_integer('batch_size', 128, 'Size of training batches')
     flags.DEFINE_float('learning_rate', 0.01, 'Learning rate for training')
 
