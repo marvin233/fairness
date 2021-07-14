@@ -3,6 +3,7 @@
 *.pyc
 .idea
 .DS_Store
+dataset
 models
 results
 result
