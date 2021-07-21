@@ -8,7 +8,9 @@ from scipy.optimize import basinhopping
 import tensorflow as tf
 from tensorflow.python.platform import flags
 import copy
-
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
+from sklearn.tree import DecisionTreeClassifier
 from adf_data.census import census_data
 from adf_data.credit import credit_data
 from adf_data.bank import bank_data
@@ -215,7 +217,7 @@ def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_s
     elif dataset == "execution":
         initial_input = [2, 0, 0, 0, 0, 0, 0, 1, 1, 1]
     elif dataset == "compas":
-        initial_input = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0]
+        initial_input = [0,0,2,0,0,3,0,0,15,1,0,1,0,10]
     minimizer = {"method": "L-BFGS-B"}
 
     def evaluate_local(inp):
@@ -239,17 +241,27 @@ def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_s
                                             param_probability_change_size, direction_probability,
                                             direction_probability_change_size, step_size)
 
-    if new_input:
+    if FLAGS.cluster_input:
+        init_sample = np.load('../results/' + dataset + '/' + str(sensitive_param) + '/cluster_' + FLAGS.model_config + '_init_samples.npy')
+        length = min(max_global, len(init_sample))
+        print(length)
+        if length < 100:
+            exit()
+    elif FLAGS.new_input:
         init_sample = np.load('../results/'+dataset+'/'+ str(sensitive_param) + '/init_samples.npy')
         # init_index = np.load('../results/'+dataset+'/'+ str(sensitive_param) + '/init_index.npy')
         length = min(max_global, len(init_sample))
+        print(length)
     else:
         length = min(max_global, len(X))
+        print(length)
     
     value_list = []
     for i in range(length):
         # global generation
-        if new_input:
+        if FLAGS.cluster_input:
+            inp = list(init_sample[i])
+        elif FLAGS.new_input:
             inp = list(init_sample[i])
         else:
             inp = global_discovery.__call__(initial_input)
@@ -263,7 +275,8 @@ def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_s
             global_miss.add(tuple(temp))
         ###############
         # RQ1
-        # continue
+        if FLAGS.exp == 'RQ1':
+            continue
         # if get an individual discriminatory instance
         if result != inp[sensitive_param - 1] and (tuple(temp) not in global_disc_inputs) and (
             tuple(temp) not in local_disc_inputs):
@@ -279,8 +292,9 @@ def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_s
                       float(len(local_disc_inputs)) / float(len(tot_inputs)) * 100))
 
     # RQ1
-    # print(max_global, max_global - len(global_miss_list))
-    # exit()
+    if FLAGS.exp == 'RQ1':
+        print(max_global, max_global - len(global_miss_list))
+        exit()
 
     # create the folder for storing the fairness testing result
     if not os.path.exists('../results/'):
@@ -304,26 +318,33 @@ def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_s
     print("Total Inputs are " + str(len(tot_inputs)))
     print("Total discriminatory inputs of global search - " + str(len(global_disc_inputs)))
     print("Total discriminatory inputs of local search - " + str(len(local_disc_inputs)))
-    
+    print(FLAGS.dataset, FLAGS.sens_param)
+    if FLAGS.exp == 'RQ2':
+        print(print(FLAGS.new_input))
+
+
 def main(argv=None):
-    aequitas(dataset = FLAGS.dataset,
-             sensitive_param = FLAGS.sens_param,
-             model_path = FLAGS.model_path,
-             max_global = FLAGS.max_global,
-             max_local = FLAGS.max_local,
-             step_size = FLAGS.step_size,
-             new_input = FLAGS.new_input)
+    aequitas(dataset=FLAGS.dataset,
+             sensitive_param=FLAGS.sens_param,
+             model_path=FLAGS.model_path,
+             max_global=FLAGS.max_global,
+             max_local=FLAGS.max_local,
+             step_size=FLAGS.step_size,
+             new_input=FLAGS.new_input)
 
 # census: 1 age, 8 race, 9 sex
 # bank: 1 age
 # compas: 2 age, 3 race
 if __name__ == '__main__':
-    flags.DEFINE_string("dataset", "compas", "the name of dataset")
-    flags.DEFINE_integer('sens_param', 3, 'sensitive index, index start from 1, 9 for gender, 8 for race')
+    flags.DEFINE_string("dataset", "census", "the name of dataset")
+    flags.DEFINE_integer('sens_param', 8, 'sensitive index, index start from 1, 9 for gender, 8 for race')
     flags.DEFINE_string('model_path', '../models/', 'the path for testing model')
-    flags.DEFINE_integer('max_global', 1000, 'number of maximum samples for global search')
+    flags.DEFINE_integer('max_global', 100, 'number of maximum samples for global search')
     flags.DEFINE_integer('max_local', 100, 'number of maximum samples for local search')
     flags.DEFINE_float('step_size', 1.0, 'step size for perturbation')
-    flags.DEFINE_boolean('new_input', True, 'our new input approach')
-
+    flags.DEFINE_boolean('new_input', False, 'our new input approach')
+    flags.DEFINE_boolean('cluster_input', True, 'shap & cluster')
+    flags.DEFINE_string('exp', 'RQ3', 'our new input approach')
+    flags.DEFINE_string('model_config', 'LogisticRegression', 'ML Models')
+    # LogisticRegression, SVC, DecisionTreeClassifier
     tf.app.run()

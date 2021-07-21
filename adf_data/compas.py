@@ -1,4 +1,5 @@
 import numpy as np
+from adf_utils.config import compas
 import sys
 sys.path.append("../")
 
@@ -28,6 +29,6 @@ def compas_data():
     X = np.array(X, dtype=float)
     Y = np.array(Y, dtype=float)
 
-    input_shape = (None, 12)
+    input_shape = (None, compas.params)
     nb_classes = 2
     return X, Y, input_shape, nb_classes

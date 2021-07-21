@@ -132,7 +132,22 @@ class bank:
     input_bounds.append([0, 3])
 
     # the name of each feature
-    feature_name = ["age", "job", "marital", "education", "default", "balance", "housing", "loan", "contact", "day", "month", "duration", "campaign", "pdays", "previous", "poutcome"]
+    feature_name = ["age",
+                    "job",
+                    "marital",
+                    "education",
+                    "default",
+                    "balance",
+                    "housing",
+                    "loan",
+                    "contact",
+                    "day",
+                    "month",
+                    "duration",
+                    "campaign",
+                    "pdays",
+                    "previous",
+                    "poutcome"]
 
     # the name of each class
     class_name = ["no", "yes"]
@@ -187,39 +202,43 @@ class compas:
     """
 
     # the size of total features
-    params = 12
+    params = 14
 
     # the valid religion of each feature
     input_bounds = []
-    input_bounds.append([0, 3]) #1 Agency_Text
-    input_bounds.append([0, 1]) #2 Sex_Code_Text
-    input_bounds.append([0, 8]) #3 Ethnic_Code_Text
-    input_bounds.append([0, 1]) #4 ScaleSet
-    input_bounds.append([0, 1]) #5 Language
-    input_bounds.append([0, 6]) #6 LegalStatus
-    input_bounds.append([0, 5]) #7 CustodyStatus
-    input_bounds.append([0, 6]) #8 MaritalStatus
-    input_bounds.append([0, 3]) #9 RecSupervisionLevel
-    input_bounds.append([0, 2]) #10 DisplayText
-    input_bounds.append([0, 60]) #11 RawScore
-    input_bounds.append([0, 1]) #12 AssessmentType
+    input_bounds.append([0, 1]) #0 sex
+    input_bounds.append([1, 9]) #1 age
+    input_bounds.append([0, 5]) #2 race
+    input_bounds.append([0, 20]) #3 juv_fel_count
+    input_bounds.append([0, 13]) #4 juv_misd_count
+    input_bounds.append([0, 11]) #5 juv_other_count
+    input_bounds.append([0, 4]) #6 priors_count
+    input_bounds.append([-6, 10]) #7 days_b_screening_arrest
+    input_bounds.append([0, 90]) #8 c_days_from_compas
+    input_bounds.append([0, 2]) #9 c_charge_degree
+    input_bounds.append([-1, 1]) #10 is_recid
+    input_bounds.append([0, 2]) #11 r_charge_degree
+    input_bounds.append([0, 1]) #12 is_violent_recid
+    input_bounds.append([-1, 10]) #13 v_decile_score
 
     # the name of each feature
-    feature_name = ["Agency_Text",
-                    "Sex_Code_Text",
-                    "Ethnic_Code_Text",
-                    "ScaleSet",
-                    "Language",
-                    "LegalStatus",
-                    "CustodyStatus",
-                    "MaritalStatus",
-                    "RecSupervisionLevel",
-                    "DisplayText",
-                    "RawScore",
-                    "AssessmentType"]
+    feature_name = ["sex",
+                    "age",
+                    "race",
+                    "juv_fel_count",
+                    "juv_misd_count",
+                    "juv_other_count",
+                    "priors_count",
+                    "days_b_screening_arrest",
+                    "c_days_from_compas",
+                    "c_charge_degree",
+                    "is_recid",
+                    "r_charge_degree",
+                    "is_violent_recid",
+                    "v_decile_score"]
 
     # the name of each class
     class_name = ["Low", "High"]
 
     # specify the categorical features with their indices
-    categorical_features = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    categorical_features = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]

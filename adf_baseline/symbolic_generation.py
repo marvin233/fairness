@@ -236,17 +236,27 @@ def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, limit
     local_disc_inputs = set()
     local_disc_inputs_list = []
     tot_inputs = set()
+    q = PriorityQueue()  # low push first
 
-    if new_input:
+    if FLAGS.cluster_input:
+        init_index = np.load('../results/' + dataset + '/' + str(sensitive_param) + '/cluster_' + FLAGS.model_config + '_init_samples.npy')
+        inputs = init_index[:min(limit, len(init_index))]
+        print(len(inputs))
+        if len(inputs)<100:
+            exit()
+        for inp in inputs[::-1]:
+            q.put((rank1, inp.tolist()))
+    elif new_input:
         init_index = np.load('../results/'+dataset+'/'+ str(sensitive_param) + '/init_index.npy')
         inputs = init_index[:min(limit, len(init_index))]
+        print(len(inputs))
+        for inp in inputs[::-1]:
+            q.put((rank1, X[inp].tolist()))
     else:
         # select the seed input for fairness testing
         inputs = seed_test_input(dataset, cluster_num, limit)
-    
-    q = PriorityQueue() # low push first
-    for inp in inputs[::-1]:
-        q.put((rank1, X[inp].tolist()))
+        for inp in inputs[::-1]:
+            q.put((rank1, X[inp].tolist()))
 
     visited_path = []
     l_count = 0
@@ -260,7 +270,8 @@ def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, limit
         if found:
             found_number += 1
         # RQ1
-        # continue
+        if FLAGS.exp == 'RQ1':
+            continue
 
         ###
         p = getPath(X, sess, x, preds, t, data_config[dataset])
@@ -335,8 +346,9 @@ def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, limit
             prefix_pred = prefix_pred + [c]
 
     # RQ1
-    # print(limit, found_number)
-    # exit()
+    if FLAGS.exp == 'RQ1':
+        print(limit, found_number)
+        exit()
     # create the folder for storing the fairness testing result
     if not os.path.exists('../results/'):
         os.makedirs('../results/')
@@ -362,6 +374,10 @@ def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, limit
     print("Total Inputs are " + str(len(tot_inputs)))
     print("Total discriminatory inputs of global search - " + str(len(global_disc_inputs)))
     print("Total discriminatory inputs of local search - " + str(len(local_disc_inputs)))
+    print(FLAGS.dataset, FLAGS.sens_param)
+    if FLAGS.exp == 'RQ2':
+        print(print(FLAGS.new_input))
+
 
 def main(argv=None):
     symbolic_generation(dataset=FLAGS.dataset,
@@ -373,13 +389,16 @@ def main(argv=None):
 
 # census: 1 age, 8 race, 9 sex
 # bank: 1 age
-# compas: 2 age, 3 race
+# compas: 1 sex, 2 age, 3 race
 if __name__ == '__main__':
-    flags.DEFINE_string('dataset', 'compas', 'the name of dataset')
-    flags.DEFINE_integer('sens_param', 3, 'sensitive index, index start from 1, 9 for gender, 8 for race.')
+    flags.DEFINE_string('dataset', 'census', 'the name of dataset')
+    flags.DEFINE_integer('sens_param', 1, 'sensitive index, index start from 1, 9 for gender, 8 for race.')
     flags.DEFINE_string('model_path', '../models/', 'the path for testing model')
-    flags.DEFINE_integer('sample_limit', 1000, 'number of samples to search')
+    flags.DEFINE_integer('sample_limit', 100, 'number of samples to search')
     flags.DEFINE_integer('cluster_num', 4, 'the number of clusters to form as well as the number of centroids to generate')
-    flags.DEFINE_boolean('new_input', True, 'our new input approach')
-
+    flags.DEFINE_boolean('new_input', False, 'our new input approach')
+    flags.DEFINE_boolean('cluster_input', False, 'shap & cluster')
+    flags.DEFINE_string('exp', 'RQ3', 'our new input approach')
+    flags.DEFINE_string('model_config', 'DecisionTreeClassifier', 'ML Models')
+    # LogisticRegression, SVC, DecisionTreeClassifier
     tf.app.run()

@@ -25,6 +25,7 @@ def census_data():
                 continue
             # L = map(int, line1[:-1])
             L = [int(i) for i in line1[:-1]]
+
             X.append(L)
             if int(line1[-1]) == 0:
                 Y.append([1, 0])

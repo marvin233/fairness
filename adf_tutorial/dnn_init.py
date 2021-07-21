@@ -1,13 +1,11 @@
 import numpy as np
 import pandas as df 
 import tensorflow as tf
-import os,sys
+import os, sys
 sys.path.append("../")
 import copy
-import shap 
-
+import shap
 from tensorflow.python.platform import flags
-
 from adf_data.census import census_data
 from adf_data.credit import credit_data
 from adf_data.bank import bank_data
@@ -100,13 +98,10 @@ def dnn_init(dataset, sensitive_param, model_path, max_global, max_local, max_it
 
     if FLAGS.shap:
         shap.initjs()
-        # explainer = shap.LinearExplainer(model)  # 初始化解释器
         explainer = shap.LinearExplainer(model, X)  # 初始化解释器
-        feature_name = data_config[FLAGS.dataset].feature_name
         idi = init_list
         shap_values = explainer.shap_values(idi)
         shap.summary_plot(shap_values, idi)
-        # shap.summary_plot(shap_values[0])
         exit()
 
     # create the folder for storing the fairness testing result
@@ -124,7 +119,8 @@ def dnn_init(dataset, sensitive_param, model_path, max_global, max_local, max_it
     # print the overview information of result
     print("Total Inputs are " + str(total_init))
     print("Total discriminatory inputs- " + str(len(init_list)))
-    
+    print(FLAGS.dataset, FLAGS.sens_param)
+
 
 def main(argv=None):
     dnn_init(dataset = FLAGS.dataset,
@@ -140,12 +136,12 @@ def main(argv=None):
 
 
 if __name__ == '__main__':
-    flags.DEFINE_string("dataset", "census", "the name of dataset")
-    flags.DEFINE_integer('sens_param', 1, 'sensitive index, index start from 1, 9 for gender, 8 for race')
+    flags.DEFINE_string("dataset", "compas", "the name of dataset")
+    flags.DEFINE_integer('sens_param', 3, 'sensitive index, index start from 1, 9 for gender, 8 for race')
     flags.DEFINE_string('model_path', '../models/', 'the path for testing model')
-    flags.DEFINE_integer('max_global', 10, 'maximum number of samples for global search')
-    flags.DEFINE_integer('max_local', 10, 'maximum number of samples for local search')
+    flags.DEFINE_integer('max_global', 100, 'maximum number of samples for global search')
+    flags.DEFINE_integer('max_local', 100, 'maximum number of samples for local search')
     flags.DEFINE_integer('max_iter', 10, 'maximum iteration of global perturbation')
-    flags.DEFINE_boolean('shap', True, 'shap value')
+    flags.DEFINE_boolean('shap', False, 'shap value')
 
     tf.app.run()

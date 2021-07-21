@@ -239,6 +239,7 @@ def model_eval(sess, x, y, predictions, X_test=None, Y_test=None,
 
     return accuracy
 
+
 def model_argmax(sess, x, predictions, samples, feed=None):
     """
     Helper function that computes the current class prediction

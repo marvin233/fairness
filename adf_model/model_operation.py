@@ -71,7 +71,8 @@ def training(dataset, sens_param, model_path, nb_epochs, batch_size, learning_ra
     X, Y, input_shape, nb_classes = data[dataset]()
     if invert:
         X = invert_sensitive(X, sens_param)
-        train_dir = model_path  + dataset +"/"+ str(FLAGS.sens_param) +"/invert/"
+        train_dir = model_path + dataset +"/"+ str(FLAGS.sens_param) +"/invert/"
+
     tf.set_random_seed(1234)
     config = tf.ConfigProto()
     config.gpu_options.per_process_gpu_memory_fraction = 0.8
@@ -120,10 +121,10 @@ def main(argv=None):
 
 
 if __name__ == '__main__':
-    flags.DEFINE_string("dataset", "compas", "the name of dataset")
-    flags.DEFINE_integer('sens_param', 3, 'sensitive index, index start from 1, 9 for gender, 8 for race')
+    flags.DEFINE_string("dataset", "bank", "the name of dataset")
+    flags.DEFINE_integer('sens_param', 1, 'sensitive index, index start from 1, 9 for gender, 8 for race')
     flags.DEFINE_string("model_path", "../models/", "the name of path for saving model")
-    flags.DEFINE_integer('nb_epochs', 100, 'Number of epochs to train model')
+    flags.DEFINE_integer('nb_epochs', 200, 'Number of epochs to train model')
     flags.DEFINE_integer('batch_size', 128, 'Size of training batches')
     flags.DEFINE_float('learning_rate', 0.01, 'Learning rate for training')
 
