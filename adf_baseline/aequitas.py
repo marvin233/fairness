@@ -160,7 +160,7 @@ def check_for_error_condition(conf, sess, x, preds, t, sens):
     return t[sens - 1]
 
 
-def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_size, new_input):
+def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_size, new_input, cluster_input, retraining):
     """
     The implementation of AEQUITAS_Fully_Connected
     :param dataset: the name of testing dataset
@@ -323,6 +323,7 @@ def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_s
         print(print(FLAGS.new_input))
 
 
+
 def main(argv=None):
     aequitas(dataset=FLAGS.dataset,
              sensitive_param=FLAGS.sens_param,
@@ -330,21 +331,24 @@ def main(argv=None):
              max_global=FLAGS.max_global,
              max_local=FLAGS.max_local,
              step_size=FLAGS.step_size,
-             new_input=FLAGS.new_input)
+             new_input=FLAGS.new_input,
+             cluster_input=FLAGS.cluster_input,
+             retraining=FLAGS.retraining)
 
 # census: 1 age, 8 race, 9 sex
 # bank: 1 age
 # compas: 2 age, 3 race
 if __name__ == '__main__':
     flags.DEFINE_string("dataset", "census", "the name of dataset")
-    flags.DEFINE_integer('sens_param', 8, 'sensitive index, index start from 1, 9 for gender, 8 for race')
+    flags.DEFINE_integer('sens_param', 9, 'sensitive index, index start from 1, 9 for gender, 8 for race')
     flags.DEFINE_string('model_path', '../models/', 'the path for testing model')
     flags.DEFINE_integer('max_global', 100, 'number of maximum samples for global search')
     flags.DEFINE_integer('max_local', 100, 'number of maximum samples for local search')
     flags.DEFINE_float('step_size', 1.0, 'step size for perturbation')
     flags.DEFINE_boolean('new_input', False, 'our new input approach')
-    flags.DEFINE_boolean('cluster_input', True, 'shap & cluster')
-    flags.DEFINE_string('exp', 'RQ3', 'our new input approach')
+    flags.DEFINE_boolean('cluster_input', False, 'shap & cluster')
+    flags.DEFINE_string('exp', 'RQ4', 'our new input approach')
     flags.DEFINE_string('model_config', 'LogisticRegression', 'ML Models')
-    # LogisticRegression, SVC, DecisionTreeClassifier
+    # LogisticRegression, SVC, DecisionTreeClassifier, MLPClassifier
+    flags.DEFINE_boolean('retraining', True, 'retraining')
     tf.app.run()

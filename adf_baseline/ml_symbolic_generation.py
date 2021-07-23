@@ -1,5 +1,7 @@
 import sys
 sys.path.append("../")
+import warnings
+warnings.filterwarnings('ignore')
 import tensorflow as tf
 from tensorflow.python.platform import flags
 import numpy as np
@@ -24,7 +26,11 @@ from adf_data.compas import compas_data
 from adf_utils.config import census, credit, bank, execution, compas
 from adf_utils.utils_tf import model_argmax
 from adf_tutorial.utils import cluster
-
+from sklearn.neural_network import MLPClassifier
+from sklearn.neural_network import MLPRegressor
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from adf_utils.performance import accuracy, precision, recall, f1_score
 FLAGS = flags.FLAGS
 
 
@@ -192,13 +198,16 @@ def gen_arguments(conf):
     return arguments
 
 
-def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, limit, new_input):
+def symbolic_generation(dataset, sensitive_param, limit, max_iter, cluster_num, new_input, cluster_input, model_name):
     data = {"census":census_data, "credit":credit_data, "bank":bank_data, "execution":execution_data, "compas":compas_data}
     data_config = {"census":census, "credit":credit, "bank":bank, "execution":execution, "compas":compas}
     model_config = {
-        "LogisticRegression": LogisticRegression(C=1.0, penalty='l2', solver='liblinear', max_iter=FLAGS.max_iter),
-        "SVC": SVC(kernel='rbf', probability=True, max_iter=FLAGS.max_iter),
-        "DecisionTreeClassifier": DecisionTreeClassifier()}
+        "LogisticRegression": LogisticRegression(C=1.0, penalty='l2', solver='liblinear', max_iter=max_iter),
+        "SVC": SVC(kernel='rbf', probability=True, max_iter=max_iter),
+        "DecisionTreeClassifier": DecisionTreeClassifier(),
+        "MLPRegressor": make_pipeline(StandardScaler(), MLPRegressor(hidden_layer_sizes=(3,), activation='logistic', max_iter=max_iter, learning_rate='invscaling', random_state=0)),
+        "MLPClassifier": make_pipeline(StandardScaler(), MLPClassifier(hidden_layer_sizes=(3,), max_iter=max_iter, learning_rate='invscaling', random_state=0)),
+    }
     # the rank for priority queue, rank1 is for seed inputs, rank2 for local, rank3 for global
     rank1 = 5
     rank2 = 1
@@ -209,7 +218,7 @@ def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, limit
     X, Y, input_shape, nb_classes = data[dataset]()
     Y = Y[:,1]
     arguments = gen_arguments(data_config[dataset])
-    model = model_config[FLAGS.model_config]
+    model = model_config[model_name]
     model.fit(X, Y)
 
     # store the result of fairness testing
@@ -222,8 +231,8 @@ def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, limit
     tot_inputs = set()
     q = PriorityQueue()  # low push first
 
-    if FLAGS.cluster_input:
-        init_index = np.load('../results/' + dataset + '/' + str(sensitive_param) + '/cluster_' + FLAGS.model_config + '_init_samples.npy')
+    if cluster_input:
+        init_index = np.load('../results/' + dataset + '/' + str(sensitive_param) + '/'+model_name+'_cluster_init_samples.npy')
         inputs = init_index[:min(limit, len(init_index))]
         print(len(inputs))
         if len(inputs)<100:
@@ -231,7 +240,7 @@ def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, limit
         for inp in inputs[::-1]:
             q.put((rank1, inp.tolist()))
     elif new_input:
-        init_index = np.load('../results/'+dataset+'/'+ str(sensitive_param) + '/init_index.npy')
+        init_index = np.load('../results/'+dataset+'/'+ str(sensitive_param) + '/'+model_name+'_init_index.npy')
         inputs = init_index[:min(limit, len(init_index))]
         print(len(inputs))
         for inp in inputs[::-1]:
@@ -253,9 +262,6 @@ def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, limit
         found = check_for_error_condition(model, data_config[dataset], t, sensitive_param)
         if found:
             found_number += 1
-        # RQ1
-        if FLAGS.exp == 'RQ1':
-            continue
 
         ###
         p = getPath(X, model, t, data_config[dataset])
@@ -329,10 +335,6 @@ def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, limit
 
             prefix_pred = prefix_pred + [c]
 
-    # RQ1
-    if FLAGS.exp == 'RQ1':
-        print(limit, found_number)
-        exit()
     # create the folder for storing the fairness testing result
     if not os.path.exists('../results/'):
         os.makedirs('../results/')
@@ -341,48 +343,44 @@ def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, limit
     if not os.path.exists('../results/'+ dataset + '/'+ str(sensitive_param) + '/'):
         os.makedirs('../results/' + dataset + '/'+ str(sensitive_param) + '/')
 
-    np.save('../results/' + dataset + '/' + str(sensitive_param) + '/global_miss_symbolic.npy',
-            np.array(global_miss_list))
-    np.save('../results/' + dataset + '/' + str(sensitive_param) + '/global_init_symbolic.npy',
-            np.array(global_init_list))
-    print("Total missing inputs of global search - " + str(len(global_miss_list)))
-    print("Total init inputs of global search - " + str(len(global_init_list)))
-    
+    if cluster_input:
+        inputs_way = 'cluster'
+    elif new_input:
+        inputs_way = 'new'
+    else:
+        inputs_way = 'ori'
     # storing the fairness testing result
-    np.save('../results/' + dataset + '/' + str(sensitive_param) + '/global_samples_symbolic.npy',
-            np.array(global_disc_inputs_list))
-    np.save('../results/' + dataset + '/' + str(sensitive_param) + '/local_samples_symbolic.npy',
-            np.array(local_disc_inputs_list))
+    np.save('../results/' + dataset + '/' + str(sensitive_param) + '/sym_' + model_name + '_global_' + inputs_way + '.npy', np.array(global_disc_inputs))
+    np.save('../results/' + dataset + '/' + str(sensitive_param) + '/sym_' + model_name + '_local_' + inputs_way + '.npy', np.array(local_disc_inputs))
 
     # print the overview information of result
     print("Total Inputs are " + str(len(tot_inputs)))
     print("Total discriminatory inputs of global search - " + str(len(global_disc_inputs)))
     print("Total discriminatory inputs of local search - " + str(len(local_disc_inputs)))
-    print(FLAGS.dataset, FLAGS.sens_param)
-    if FLAGS.exp == 'RQ2':
-        print(print(FLAGS.new_input))
+    print(dataset, sensitive_param)
 
 
 def main(argv=None):
     symbolic_generation(dataset=FLAGS.dataset,
                         sensitive_param=FLAGS.sens_param,
-                        model_path=FLAGS.model_path,
-                        cluster_num=FLAGS.cluster_num,
                         limit=FLAGS.sample_limit,
-                        new_input=FLAGS.new_input)
+                        max_iter=FLAGS.max_iter,
+                        cluster_num=FLAGS.cluster_num,
+                        new_input=FLAGS.new_input,
+                        cluster_input=FLAGS.cluster_input,
+                        model_name=FLAGS.model_name)
 
 # census: 1 age, 8 race, 9 sex
 # bank: 1 age
 # compas: 1 sex, 2 age, 3 race
 if __name__ == '__main__':
     flags.DEFINE_string('dataset', 'census', 'the name of dataset')
-    flags.DEFINE_integer('sens_param', 1, 'sensitive index, index start from 1, 9 for gender, 8 for race.')
-    flags.DEFINE_string('model_path', '../models/', 'the path for testing model')
+    flags.DEFINE_integer('sens_param', 9, 'sensitive index, index start from 1, 9 for gender, 8 for race.')
     flags.DEFINE_integer('sample_limit', 100, 'number of samples to search')
     flags.DEFINE_integer('max_iter', 300, 'maximum iteration of global perturbation')
     flags.DEFINE_integer('cluster_num', 4, 'the number of clusters to form as well as the number of centroids to generate')
     flags.DEFINE_boolean('new_input', False, 'our new input approach')
-    flags.DEFINE_boolean('cluster_input', True, 'shap & cluster')
-    flags.DEFINE_string('model_config', 'SVC', 'ML Models')
-    # LogisticRegression, SVC, DecisionTreeClassifier
+    flags.DEFINE_boolean('cluster_input', False, 'shap & cluster')
+    flags.DEFINE_string('model_name', 'MLPClassifier', 'ML Models')
+    # LogisticRegression, SVC, DecisionTreeClassifier, MLPClassifier
     tf.app.run()

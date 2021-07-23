@@ -193,7 +193,8 @@ def gen_arguments(conf):
         arguments.append(Int(conf.feature_name[i]))
     return arguments
 
-def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, limit, new_input):
+
+def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, limit, new_input, retraining):
     """
     The implementation of symbolic generation
     :param dataset: the name of dataset
@@ -385,7 +386,8 @@ def main(argv=None):
                         model_path=FLAGS.model_path,
                         cluster_num=FLAGS.cluster_num,
                         limit=FLAGS.sample_limit,
-                        new_input=FLAGS.new_input)
+                        new_input=FLAGS.new_input,
+                        retraining=FLAGS.retraining)
 
 # census: 1 age, 8 race, 9 sex
 # bank: 1 age
@@ -398,7 +400,8 @@ if __name__ == '__main__':
     flags.DEFINE_integer('cluster_num', 4, 'the number of clusters to form as well as the number of centroids to generate')
     flags.DEFINE_boolean('new_input', False, 'our new input approach')
     flags.DEFINE_boolean('cluster_input', False, 'shap & cluster')
-    flags.DEFINE_string('exp', 'RQ3', 'our new input approach')
+    flags.DEFINE_string('exp', 'RQ4', 'our new input approach')
     flags.DEFINE_string('model_config', 'DecisionTreeClassifier', 'ML Models')
-    # LogisticRegression, SVC, DecisionTreeClassifier
+    # LogisticRegression, SVC, DecisionTreeClassifier, MLPClassifier
+    flags.DEFINE_boolean('retraining', True, 'retraining')
     tf.app.run()
