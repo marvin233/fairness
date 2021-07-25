@@ -32,7 +32,7 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from adf_utils.performance import accuracy, precision, recall, f1_score
 FLAGS = flags.FLAGS
-
+idi_label = -1
 
 def seed_test_input(dataset, cluster_num, limit):
     """
@@ -109,8 +109,8 @@ def check_for_error_condition(model, conf, t, sens):
             tnew[sens-1] = val
             label_new = model.predict(np.array([tnew]))
             if label_new != label:
-                return True
-    return False
+                return val
+    return t[sens - 1]
 
 
 def global_solve(path_constraint, arguments, t, conf):
@@ -198,7 +198,7 @@ def gen_arguments(conf):
     return arguments
 
 
-def symbolic_generation(dataset, sensitive_param, limit, max_iter, cluster_num, new_input, cluster_input, model_name):
+def symbolic_generation(dataset, sensitive_param, limit, max_iter, cluster_num, new_input, cluster_input, model_name, retraining, exp):
     data = {"census":census_data, "credit":credit_data, "bank":bank_data, "execution":execution_data, "compas":compas_data}
     data_config = {"census":census, "credit":credit, "bank":bank, "execution":execution, "compas":compas}
     model_config = {
@@ -234,22 +234,21 @@ def symbolic_generation(dataset, sensitive_param, limit, max_iter, cluster_num, 
     if cluster_input:
         init_index = np.load('../results/' + dataset + '/' + str(sensitive_param) + '/'+model_name+'_cluster_init_samples.npy')
         inputs = init_index[:min(limit, len(init_index))]
-        print(len(inputs))
-        if len(inputs)<100:
-            exit()
         for inp in inputs[::-1]:
             q.put((rank1, inp.tolist()))
+        inputs_way = 'cluster'
     elif new_input:
         init_index = np.load('../results/'+dataset+'/'+ str(sensitive_param) + '/'+model_name+'_init_index.npy')
         inputs = init_index[:min(limit, len(init_index))]
-        print(len(inputs))
         for inp in inputs[::-1]:
             q.put((rank1, X[inp].tolist()))
+        inputs_way = 'new'
     else:
         # select the seed input for fairness testing
         inputs = seed_test_input(dataset, cluster_num, limit)
         for inp in inputs[::-1]:
             q.put((rank1, X[inp].tolist()))
+        inputs_way = 'ori'
 
     visited_path = []
     l_count = 0
@@ -338,20 +337,15 @@ def symbolic_generation(dataset, sensitive_param, limit, max_iter, cluster_num, 
     # create the folder for storing the fairness testing result
     if not os.path.exists('../results/'):
         os.makedirs('../results/')
-    if not os.path.exists('../results/' + dataset + '/'):
-        os.makedirs('../results/' + dataset + '/')
-    if not os.path.exists('../results/'+ dataset + '/'+ str(sensitive_param) + '/'):
-        os.makedirs('../results/' + dataset + '/'+ str(sensitive_param) + '/')
+    if not os.path.exists('../results/' + exp + '/'):
+        os.makedirs('../results/' + exp + '/')
+    if not os.path.exists('../results/' + exp + '/SG/'):
+        os.makedirs('../results/' + exp + '/SG/')
 
-    if cluster_input:
-        inputs_way = 'cluster'
-    elif new_input:
-        inputs_way = 'new'
-    else:
-        inputs_way = 'ori'
-    # storing the fairness testing result
-    np.save('../results/' + dataset + '/' + str(sensitive_param) + '/sym_' + model_name + '_global_' + inputs_way + '.npy', np.array(global_disc_inputs))
-    np.save('../results/' + dataset + '/' + str(sensitive_param) + '/sym_' + model_name + '_local_' + inputs_way + '.npy', np.array(local_disc_inputs))
+    f = open('../results/' + exp + '/SG/' + model_name + '_' + dataset + '_' + str(sensitive_param) + '_' + inputs_way + '.txt', 'w', encoding='utf-8', newline='')
+    f.write('global,local\n')
+    f.write(str(len(global_disc_inputs)) + ',' + str(len(local_disc_inputs)) + '\n')
+    f.close()
 
     # print the overview information of result
     print("Total Inputs are " + str(len(tot_inputs)))
@@ -359,28 +353,259 @@ def symbolic_generation(dataset, sensitive_param, limit, max_iter, cluster_num, 
     print("Total discriminatory inputs of local search - " + str(len(local_disc_inputs)))
     print(dataset, sensitive_param)
 
+def majority_voting(models, x):
+    results = []
+    for i in range(len(models)):
+        y = models[i].predict(x).astype('int')
+        results.append(y)
+    # 只适用于二分类
+    if np.sum(results) > int(len(results)/2):
+        return [1]
+    return [0]
+
+
+def generate_data(cluster_input, dataset, sensitive_param, model_name, limit, rank1, new_input, cluster_num, X, model, data_config, arguments, rank2, T1, rank3, label_models):
+    global idi_label
+    # store the result of fairness testing
+    global_disc_inputs = set()
+    global_disc_inputs_list = []
+    global_miss_list = []
+    local_disc_inputs = set()
+    local_disc_inputs_list = []
+    tot_inputs = set()
+    q = PriorityQueue()  # low push first
+
+    if cluster_input:
+        init_sample = np.load('../results/' + dataset + '/' + str(sensitive_param) + '/' + model_name + '_cluster_init_samples.npy')
+        inputs = init_sample[:min(limit, len(init_sample))]
+        for inp in inputs[::-1]:
+            q.put((rank1, inp.tolist()))
+    elif new_input:
+        init_sample = np.load('../results/' + dataset + '/' + str(sensitive_param) + '/' + model_name + '_init_samples.npy')
+        inputs = init_sample[:min(limit, len(init_sample))]
+        for inp in inputs[::-1]:
+            q.put((rank1, inp.tolist()))
+    else:
+        # select the seed input for fairness testing
+        inputs = seed_test_input(dataset, cluster_num, limit)
+        for inp in inputs[::-1]:
+            q.put((rank1, X[inp].tolist()))
+
+    visited_path = []
+    l_count = 0
+    g_count = 0
+
+    while len(tot_inputs) < limit and q.qsize() != 0:
+        t = q.get()
+        t_rank = t[0]
+        t = np.array(t[1])
+        result = check_for_error_condition(model, data_config[dataset], t, sensitive_param)
+        p = getPath(X, model, t, data_config[dataset])
+        temp = copy.deepcopy(t.tolist())
+        temp = temp[:sensitive_param - 1] + temp[sensitive_param:]
+        tot_inputs.add(tuple(temp))
+        if result == int(t[sensitive_param - 1]):
+            global_miss_list.append(temp)
+        else:
+            temp = copy.deepcopy(t.tolist())
+            temp[sensitive_param-1] = result
+            idi_label = majority_voting(label_models, np.array([temp]))
+            temp = np.array(list(temp) + list(idi_label)).astype('int')
+            if t_rank > 2:
+                global_disc_inputs.add(tuple(temp))
+                global_disc_inputs_list.append(temp)
+            else:
+                local_disc_inputs.add(tuple(temp))
+                local_disc_inputs_list.append(temp)
+            if len(tot_inputs) == limit:
+                break
+
+            # local search
+            for i in range(len(p)):
+                path_constraint = copy.deepcopy(p)
+                c = path_constraint[i]
+                if c[0] == sensitive_param - 1:
+                    continue
+                if c[1] == "<=":
+                    c[1] = ">"
+                    c[3] = 1.0 - c[3]
+                else:
+                    c[1] = "<="
+                    c[3] = 1.0 - c[3]
+
+                if path_constraint not in visited_path:
+                    visited_path.append(path_constraint)
+                    input = local_solve(path_constraint, arguments, t, i, data_config[dataset])
+                    l_count += 1
+                    if input != None:
+                        r = average_confidence(path_constraint)
+                        q.put((rank2 + r, input))
+
+        # global search
+        prefix_pred = []
+        for c in p:
+            if c[0] == sensitive_param - 1:
+                continue
+            if c[3] < T1:
+                break
+
+            n_c = copy.deepcopy(c)
+            if n_c[1] == "<=":
+                n_c[1] = ">"
+                n_c[3] = 1.0 - c[3]
+            else:
+                n_c[1] = "<="
+                n_c[3] = 1.0 - c[3]
+            path_constraint = prefix_pred + [n_c]
+
+            # filter out the path_constraint already solved before
+            if path_constraint not in visited_path:
+                visited_path.append(path_constraint)
+                input = global_solve(path_constraint, arguments, t, data_config[dataset])
+                g_count += 1
+                if input != None:
+                    r = average_confidence(path_constraint)
+                    q.put((rank3 - r, input))
+
+            prefix_pred = prefix_pred + [c]
+    disc_inputs = global_disc_inputs.union(local_disc_inputs)
+    return disc_inputs
+
+
+def retraining_symbolic_generation(dataset, sensitive_param, limit, max_iter, cluster_num, new_input, cluster_input, model_name, retraining, exp):
+    global idi_label
+    data = {"census": census_data, "credit": credit_data, "bank": bank_data, "execution": execution_data, "compas": compas_data}
+    data_config = {"census": census, "credit": credit, "bank": bank, "execution": execution, "compas": compas}
+    model_config = {
+        "LogisticRegression": LogisticRegression(C=1.0, penalty='l2', solver='liblinear', max_iter=max_iter),
+        "DecisionTreeClassifier": DecisionTreeClassifier(),
+        "MLPClassifier": make_pipeline(StandardScaler(), MLPClassifier(hidden_layer_sizes=(3,), max_iter=max_iter, learning_rate='invscaling', random_state=0)),
+    }
+    label_models = [LogisticRegression(C=1.0, penalty='l2', solver='liblinear', max_iter=max_iter), DecisionTreeClassifier(), make_pipeline(StandardScaler(), MLPClassifier(hidden_layer_sizes=(3,), max_iter=max_iter, learning_rate='invscaling', random_state=0))]
+    # the rank for priority queue, rank1 is for seed inputs, rank2 for local, rank3 for global
+    rank1 = 5
+    rank2 = 1
+    rank3 = 10
+    T1 = 0.3
+
+    # create the folder for storing the fairness testing result
+    if not os.path.exists('../results/'):
+        os.makedirs('../results/')
+    if not os.path.exists('../results/' + exp + '/'):
+        os.makedirs('../results/' + exp + '/')
+    if not os.path.exists('../results/' + exp + '/SG/'):
+        os.makedirs('../results/' + exp + '/SG/')
+    f = open('../results/' + exp + '/SG/' + model_name + '_' + dataset + '_' + str(sensitive_param) + '.txt', 'w', encoding='utf-8', newline='')
+
+    # prepare the testing data and model
+    X, Y, input_shape, nb_classes = data[dataset]()
+    Y = Y[:, 1]
+    train_num = int(len(X) * 0.6)
+    X_train = X[:train_num]
+    Y_train = Y[:train_num]
+    X_test = X[train_num:]
+    Y_test = Y[train_num:]
+    arguments = gen_arguments(data_config[dataset])
+    model = model_config[model_name]
+    model.fit(X_train, Y_train)
+    # 预测idi标签
+    for i in range(len(label_models)):
+        label_models[i].fit(X, Y)
+    # performance
+    Y_predict = model.predict(X_test)
+    f.write('performance：\n')
+    f.write('accuracy: '+str(accuracy(Y_test, Y_predict))+'\n')
+    f.write('precision: '+str(precision(Y_test, Y_predict))+'\n')
+    f.write('recall: '+str(recall(Y_test, Y_predict))+'\n')
+    f.write('f1_score: '+str(f1_score(Y_test, Y_predict))+'\n')
+    f.write('---------------------------------\n')
+
+    # 表格属性
+    # ori: performance, retraining performance, ori, new, cluster
+    # new: performance, retraining performance, ori, new, cluster
+    # cluster: performance, retraining performance, ori, new, cluster
+
+    # retraining
+    all_disc_inputs = []
+    for [cluster_input, new_input] in [[False,False],[False,True],[True,False]]:
+        disc_inputs = generate_data(cluster_input, dataset, sensitive_param, model_name, limit, rank1, new_input, cluster_num, X, model, data_config, arguments, rank2, T1, rank3, label_models)
+        disc_inputs = np.array(list(disc_inputs))
+        all_disc_inputs.append(disc_inputs)
+
+    for disc_input_1 in all_disc_inputs:
+        model_copy = copy.deepcopy(model)
+        X_train_copy = copy.deepcopy(X_train)
+        Y_train_copy = copy.deepcopy(Y_train)
+        if len(disc_input_1) > 0:
+            X_train_copy = np.concatenate([X_train_copy, disc_input_1[:, :-1]])
+            Y_train_copy = np.concatenate([Y_train_copy, disc_input_1[:, -1]])
+        model_copy.fit(X_train_copy, Y_train_copy)
+
+        # performance
+        Y_predict = model_copy.predict(X_test)
+        f.write('重训练performance：\n')
+        f.write('accuracy: ' + str(accuracy(Y_test, Y_predict)) + '\n')
+        f.write('precision: ' + str(precision(Y_test, Y_predict)) + '\n')
+        f.write('recall: ' + str(recall(Y_test, Y_predict)) + '\n')
+        f.write('f1_score: ' + str(f1_score(Y_test, Y_predict)) + '\n')
+
+        for disc_input_2 in all_disc_inputs:
+            total_idi = 0
+            for inp in disc_input_2:
+                inp = inp[:-1]
+                result = check_for_error_condition(model_copy, data_config[dataset], inp, sensitive_param)
+                if result != int(inp[sensitive_param - 1]):
+                    total_idi += 1
+            f.write(str(total_idi)+'/'+str(len(disc_input_2))+'\n')
+        f.write('---------------------------------\n')
+    f.close()
+    print('end')
+
 
 def main(argv=None):
-    symbolic_generation(dataset=FLAGS.dataset,
-                        sensitive_param=FLAGS.sens_param,
-                        limit=FLAGS.sample_limit,
-                        max_iter=FLAGS.max_iter,
-                        cluster_num=FLAGS.cluster_num,
-                        new_input=FLAGS.new_input,
-                        cluster_input=FLAGS.cluster_input,
-                        model_name=FLAGS.model_name)
+    if FLAGS.retraining:
+        retraining_symbolic_generation(dataset=FLAGS.dataset,
+                                       sensitive_param=FLAGS.sens_param,
+                                       limit=FLAGS.sample_limit,
+                                       max_iter=FLAGS.max_iter,
+                                       cluster_num=FLAGS.cluster_num,
+                                       new_input=FLAGS.new_input,
+                                       cluster_input=FLAGS.cluster_input,
+                                       model_name=FLAGS.model_name,
+                                       retraining=FLAGS.retraining,
+                                       exp=FLAGS.exp)
+    else:
+        symbolic_generation(dataset=FLAGS.dataset,
+                            sensitive_param=FLAGS.sens_param,
+                            limit=FLAGS.sample_limit,
+                            max_iter=FLAGS.max_iter,
+                            cluster_num=FLAGS.cluster_num,
+                            new_input=FLAGS.new_input,
+                            cluster_input=FLAGS.cluster_input,
+                            model_name=FLAGS.model_name,
+                            retraining=FLAGS.retraining,
+                            exp=FLAGS.exp)
 
 # census: 1 age, 8 race, 9 sex
 # bank: 1 age
 # compas: 1 sex, 2 age, 3 race
 if __name__ == '__main__':
     flags.DEFINE_string('dataset', 'census', 'the name of dataset')
-    flags.DEFINE_integer('sens_param', 9, 'sensitive index, index start from 1, 9 for gender, 8 for race.')
-    flags.DEFINE_integer('sample_limit', 100, 'number of samples to search')
+    flags.DEFINE_integer('sens_param', 1, 'sensitive index, index start from 1, 9 for gender, 8 for race.')
+    flags.DEFINE_integer('sample_limit', 1000, 'number of samples to search')
     flags.DEFINE_integer('max_iter', 300, 'maximum iteration of global perturbation')
     flags.DEFINE_integer('cluster_num', 4, 'the number of clusters to form as well as the number of centroids to generate')
     flags.DEFINE_boolean('new_input', False, 'our new input approach')
     flags.DEFINE_boolean('cluster_input', False, 'shap & cluster')
-    flags.DEFINE_string('model_name', 'MLPClassifier', 'ML Models')
-    # LogisticRegression, SVC, DecisionTreeClassifier, MLPClassifier
+    flags.DEFINE_string('model_name', 'LogisticRegression', 'ML Models')
+    # LogisticRegression, DecisionTreeClassifier, MLPClassifier
+    flags.DEFINE_boolean('retraining', True, 'retraining')
+    flags.DEFINE_string('exp', 'RQ4', 'our new input approach')
     tf.app.run()
+
+
+# RQ3
+# python ml_symbolic_generation.py --dataset=census --sens_param=1 --new_input=False --cluster_input=False --model_name=LogisticRegression --exp=RQ3 --sample_limit=1000 --max_iter=300 --cluster_num=4 --retraining=False
+
+# RQ4
+# python ml_symbolic_generation.py --dataset=census --sens_param=1 --model_name=LogisticRegression --exp=RQ4 --sample_limit=1000 --max_iter=300 --cluster_num=4 --retraining=True --new_input=False --cluster_input=False

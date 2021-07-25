@@ -132,15 +132,15 @@ def main(argv=None):
 
 # census: 1 age, 8 race, 9 sex
 # bank: 1 age
-# compas: 2 age, 3 race
+# compas: 1 sex, 2 age, 3 race
 
 
 if __name__ == '__main__':
     flags.DEFINE_string("dataset", "compas", "the name of dataset")
     flags.DEFINE_integer('sens_param', 3, 'sensitive index, index start from 1, 9 for gender, 8 for race')
     flags.DEFINE_string('model_path', '../models/', 'the path for testing model')
-    flags.DEFINE_integer('max_global', 100, 'maximum number of samples for global search')
-    flags.DEFINE_integer('max_local', 100, 'maximum number of samples for local search')
+    flags.DEFINE_integer('max_global', 1000, 'maximum number of samples for global search')
+    flags.DEFINE_integer('max_local', 1000, 'maximum number of samples for local search')
     flags.DEFINE_integer('max_iter', 10, 'maximum iteration of global perturbation')
     flags.DEFINE_boolean('shap', False, 'shap value')
 

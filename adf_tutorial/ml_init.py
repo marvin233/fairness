@@ -14,17 +14,12 @@ from adf_data.bank import bank_data
 from adf_data.execution import execution_data
 from adf_data.compas import compas_data
 from adf_utils.config import census, credit, bank, execution, compas
-from adf_model.tutorial_models import dnn
-from adf_utils.utils_tf import model_argmax
 from sklearn.linear_model import LogisticRegression
-from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neural_network import MLPClassifier
-from sklearn.neural_network import MLPRegressor
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 import random
-from xgboost import XGBRegressor
 from sklearn.cluster import DBSCAN
 FLAGS = flags.FLAGS
 
@@ -69,30 +64,18 @@ def check_for_error_condition(model, conf, t, sens):
     return False
 
 
-def dnn_init(dataset, sensitive_param, max_iter, model_name):
-    """
-    The implementation of ADF
-    :param dataset: the name of testing dataset
-    :param sensitive_param: the index of sensitive feature
-    :param max_iter: the maximum iteration of global perturbation
-    """
+def ml_init(dataset, sensitive_param, max_iter, model_name):
     data = {"census":census_data, "credit":credit_data, "bank":bank_data, "execution": execution_data, "compas": compas_data}
     data_config = {"census":census, "credit":credit, "bank":bank, "execution":execution, "compas":compas}
     model_config = {
         "LogisticRegression": LogisticRegression(C=1.0, penalty='l2', solver='liblinear', max_iter=max_iter),
-        "SVC": SVC(kernel='rbf', probability=True, max_iter=max_iter),
         "DecisionTreeClassifier": DecisionTreeClassifier(),
         "MLPClassifier": make_pipeline(StandardScaler(), MLPClassifier(hidden_layer_sizes=(3,), max_iter=max_iter, learning_rate='invscaling', random_state=0)),
-        "XGBRegressor": XGBRegressor(),
-        "MLPRegressor": make_pipeline(StandardScaler(), MLPRegressor(hidden_layer_sizes=(3,), activation='logistic', max_iter=max_iter, learning_rate='invscaling', random_state=0))
     }
     invert_model_config = {
         "LogisticRegression": LogisticRegression(C=1.0, penalty='l2', solver='liblinear', max_iter=max_iter),
-        "SVC": SVC(kernel='rbf', probability=True, max_iter=max_iter),
         "DecisionTreeClassifier": DecisionTreeClassifier(),
         "MLPClassifier": make_pipeline(StandardScaler(), MLPClassifier(hidden_layer_sizes=(3,), max_iter=max_iter, learning_rate='invscaling', random_state=0)),
-        "XGBRegressor": XGBRegressor(),
-        "MLPRegressor": make_pipeline(StandardScaler(), MLPRegressor(hidden_layer_sizes=(3,), activation='logistic', max_iter=max_iter, learning_rate='invscaling', random_state=0))
     }
     # prepare the testing data and model
     X, Y, input_shape, nb_classes = data[dataset]()
@@ -130,15 +113,10 @@ def dnn_init(dataset, sensitive_param, max_iter, model_name):
         explainer = shap.TreeExplainer(model, X)
         idi = np.array(init_list)
         shap_values = explainer.shap_values(idi)[0]
-    elif model_name == 'SVC':
-        explainer = shap.KernelExplainer(model.predict_proba, X[0:100], link="logit")
-        idi = np.array(init_list)
-        shap_values = explainer.shap_values(idi[0: min(len(idi),200)])[0]
-    elif model_name in ['MLPRegressor', 'MLPClassifier']:
-        explainer = shap.KernelExplainer(model.predict, X[0:100])
+    elif model_name in ['MLPClassifier']:
+        explainer = shap.KernelExplainer(model.predict, X[0:1000])
         idi = np.array(init_list)
         shap_values = explainer.shap_values(idi[0: min(len(idi),200)])
-
     # shap_values DBSCAN 每个聚类簇挑选10个
     cluster_model = DBSCAN(eps=0.09, min_samples=10)
     cluster_labels = cluster_model.fit(shap_values).labels_
@@ -191,10 +169,10 @@ def dnn_init(dataset, sensitive_param, max_iter, model_name):
 
 
 def main(argv=None):
-    dnn_init(dataset=FLAGS.dataset,
-             sensitive_param=FLAGS.sens_param,
-             max_iter=FLAGS.max_iter,
-             model_name=FLAGS.model_name)
+    ml_init(dataset=FLAGS.dataset,
+            sensitive_param=FLAGS.sens_param,
+            max_iter=FLAGS.max_iter,
+            model_name=FLAGS.model_name)
 
 # census: 1 age, 8 race, 9 sex
 # bank: 1 age
@@ -205,7 +183,7 @@ if __name__ == '__main__':
     flags.DEFINE_string("dataset", "compas", "the name of dataset")
     flags.DEFINE_integer('sens_param', 3, 'sensitive index, index start from 1, 9 for gender, 8 for race')
     flags.DEFINE_integer('max_iter', 300, 'maximum iteration of global perturbation')
-    flags.DEFINE_string('model_name', 'SVC', 'ML Models')
-    # LogisticRegression, SVC, DecisionTreeClassifier, MLPClassifier
+    flags.DEFINE_string('model_name', 'MLPClassifier', 'ML Models')
+    # LogisticRegression, DecisionTreeClassifier, MLPClassifier
 
     tf.app.run()

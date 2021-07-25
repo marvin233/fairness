@@ -133,7 +133,7 @@ def check_for_error_condition(model, conf, t, sens):
     return t[sens - 1]
 
 
-def aequitas(dataset, sensitive_param, max_global, max_local, max_iter, step_size, new_input, cluster_input, model_name, retraining):
+def aequitas(dataset, sensitive_param, max_global, max_local, max_iter, step_size, new_input, cluster_input, model_name, retraining, exp):
     data = {"census": census_data, "credit": credit_data, "bank": bank_data, "execution": execution_data, "compas":compas_data}
     data_config = {"census": census, "credit": credit, "bank": bank, "execution": execution, "compas":compas}
     model_config = {
@@ -199,12 +199,14 @@ def aequitas(dataset, sensitive_param, max_global, max_local, max_iter, step_siz
     if cluster_input:
         init_sample = np.load('../results/' + dataset + '/' + str(sensitive_param) + '/'+model_name+'_cluster_init_samples.npy')
         length = min(max_global, len(init_sample))
+        inputs_way = 'cluster'
     elif new_input:
         init_sample = np.load('../results/'+dataset+'/'+ str(sensitive_param) + '/'+model_name+'_init_samples.npy')
         length = min(max_global, len(init_sample))
+        inputs_way = 'new'
     else:
         length = min(max_global, len(X))
-    
+        inputs_way = 'ori'
     value_list = []
     for i in range(length):
         # global generation
@@ -234,20 +236,15 @@ def aequitas(dataset, sensitive_param, max_global, max_local, max_iter, step_siz
     # create the folder for storing the fairness testing result
     if not os.path.exists('../results/'):
         os.makedirs('../results/')
-    if not os.path.exists('../results/' + dataset + '/'):
-        os.makedirs('../results/' + dataset + '/')
-    if not os.path.exists('../results/'+ dataset + '/'+ str(sensitive_param) + '/'):
-        os.makedirs('../results/' + dataset + '/'+ str(sensitive_param) + '/')
+    if not os.path.exists('../results/' + exp + '/'):
+        os.makedirs('../results/' + exp + '/')
+    if not os.path.exists('../results/' + exp + '/AEQU/'):
+        os.makedirs('../results/' + exp + '/AEQU/')
 
-    if cluster_input:
-        inputs_way = 'cluster'
-    elif new_input:
-        inputs_way = 'new'
-    else:
-        inputs_way = 'ori'
-    # storing the fairness testing result
-    np.save('../results/'+dataset+'/'+ str(sensitive_param) + '/aeq_'+model_name+'_global_'+inputs_way+'_aequitas.npy', np.array(global_disc_inputs))
-    np.save('../results/' + dataset + '/' + str(sensitive_param) + '/aeq_'+model_name+'_local_'+inputs_way+'_aequitas.npy', np.array(local_disc_inputs))
+    f = open('../results/' + exp + '/AEQU/' + model_name + '_' + dataset + '_' + str(sensitive_param) + '_' + inputs_way + '.txt', 'w', encoding='utf-8', newline='')
+    f.write('global,local\n')
+    f.write(str(len(global_disc_inputs)) + ',' + str(len(local_disc_inputs)) + '\n')
+    f.close()
 
     # print the overview information of result
     print("Total Inputs are " + str(len(tot_inputs)))
@@ -256,7 +253,19 @@ def aequitas(dataset, sensitive_param, max_global, max_local, max_iter, step_siz
     print(dataset, sensitive_param)
 
 
-def generate_data(model, dataset, data_config, sensitive_param, cluster_input, new_input, max_global, X, max_local, model_name, param_probability, param_probability_change_size, direction_probability, direction_probability_change_size, step_size):
+def majority_voting(models, x):
+    results = []
+    for i in range(len(models)):
+        y = models[i].predict(x).astype('int')
+        results.append(y)
+    # 只适用于二分类
+    if np.sum(results) > int(len(results)/2):
+        return [1]
+    return [0]
+
+
+def generate_data(model, dataset, data_config, sensitive_param, cluster_input, new_input, max_global, X, max_local, model_name, param_probability, param_probability_change_size, direction_probability, direction_probability_change_size, step_size, label_models):
+    global idi_label
     # store the result of fairness testing
     global_disc_inputs = set()
     global_disc_inputs_list = []
@@ -276,12 +285,15 @@ def generate_data(model, dataset, data_config, sensitive_param, cluster_input, n
     minimizer = {"method": "L-BFGS-B"}
 
     def evaluate_local(inp):
+        global idi_label
         result = check_for_error_condition(model, data_config[dataset], inp, sensitive_param)
         temp = copy.deepcopy(inp.astype('int').tolist())
         temp = temp[:sensitive_param - 1] + temp[sensitive_param:]
         tot_inputs.add(tuple(temp))
         if result != int(inp[sensitive_param - 1]) and (tuple(temp) not in global_disc_inputs) and (tuple(temp) not in local_disc_inputs):
-            temp = np.array(list([result]) + list(temp) + list(idi_label)).astype('int')
+            temp = copy.deepcopy(inp.astype('int').tolist())
+            temp[sensitive_param-1] = result
+            temp = np.array(list(temp) + list(idi_label)).astype('int')
             local_disc_inputs.add(tuple(temp))
             local_disc_inputs_list.append(temp)
         return not result
@@ -315,19 +327,22 @@ def generate_data(model, dataset, data_config, sensitive_param, cluster_input, n
             global_miss_list.append(temp)
             global_miss.add(tuple(temp))
         # if get an individual discriminatory instance
-        if result != inp[sensitive_param - 1] and (tuple(temp) not in global_disc_inputs) and (tuple(temp) not in local_disc_inputs):
+        if result != inp[sensitive_param - 1]:
+            idi_label = majority_voting(label_models, np.array([inp]))
+            temp = copy.deepcopy(inp)
+            temp[sensitive_param-1] = result
+            temp = np.array(list(temp) + list(idi_label)).astype('int')
             global_disc_inputs_list.append(temp)
             global_disc_inputs.add(tuple(temp))
             value_list.append([inp[sensitive_param - 1], result])
             # local generation
-            idi_label = model.predict(np.array([inp])).tolist()
             basinhopping(evaluate_local, inp, stepsize=1.0, take_step=local_perturbation, minimizer_kwargs=minimizer, niter=max_local)
             print(len(global_disc_inputs), len(local_disc_inputs),"Percentage discriminatory inputs of local search- " + str(float(len(local_disc_inputs)) / float(len(tot_inputs)) * 100))
     disc_inputs = global_disc_inputs.union(local_disc_inputs)
     return disc_inputs
 
 
-def retraining_aequitas(dataset, sensitive_param, max_global, max_local, max_iter, step_size, new_input, cluster_input, model_name, retraining):
+def retraining_aequitas(dataset, sensitive_param, max_global, max_local, max_iter, step_size, new_input, cluster_input, model_name, retraining, exp):
     global idi_label
     data = {"census": census_data, "credit": credit_data, "bank": bank_data, "execution": execution_data,"compas": compas_data}
     data_config = {"census": census, "credit": credit, "bank": bank, "execution": execution, "compas": compas}
@@ -338,7 +353,17 @@ def retraining_aequitas(dataset, sensitive_param, max_global, max_local, max_ite
         "MLPRegressor": make_pipeline(StandardScaler(),MLPRegressor(hidden_layer_sizes=(3,), activation='logistic', max_iter=max_iter,learning_rate='invscaling', random_state=0)),
         "MLPClassifier": make_pipeline(StandardScaler(), MLPClassifier(hidden_layer_sizes=(3,), max_iter=max_iter,learning_rate='invscaling', random_state=0)),
     }
+    label_models = [LogisticRegression(C=1.0, penalty='l2', solver='liblinear', max_iter=max_iter), DecisionTreeClassifier(), make_pipeline(StandardScaler(), MLPClassifier(hidden_layer_sizes=(3,), max_iter=max_iter, learning_rate='invscaling', random_state=0))]
     params = data_config[dataset].params
+
+    # create the folder for storing the fairness testing result
+    if not os.path.exists('../results/'):
+        os.makedirs('../results/')
+    if not os.path.exists('../results/' + exp + '/'):
+        os.makedirs('../results/' + exp + '/')
+    if not os.path.exists('../results/' + exp + '/AEQU/'):
+        os.makedirs('../results/' + exp + '/AEQU/')
+    f = open('../results/' + exp + '/AEQU/' + model_name + '_' + dataset + '_' + str(sensitive_param)  + '.txt', 'w', encoding='utf-8', newline='')
 
     # hyper-parameters for initial probabilities of directions
     init_prob = 0.5
@@ -359,36 +384,44 @@ def retraining_aequitas(dataset, sensitive_param, max_global, max_local, max_ite
     Y_test = Y[train_num:]
     model = model_config[model_name]
     model.fit(X_train, Y_train)
+    # 预测idi标签
+    for i in range(len(label_models)):
+        label_models[i].fit(X, Y)
     # performance
     Y_predict = model.predict(X_test)
-    print('first performance:')
-    print('accuracy', accuracy(Y_test, Y_predict))
-    print('precision', precision(Y_test, Y_predict))
-    print('recall', recall(Y_test, Y_predict))
-    print('f1_score', f1_score(Y_test, Y_predict))
+    f.write('performance：\n')
+    f.write('accuracy: ' + str(accuracy(Y_test, Y_predict)) + '\n')
+    f.write('precision: ' + str(precision(Y_test, Y_predict)) + '\n')
+    f.write('recall: ' + str(recall(Y_test, Y_predict)) + '\n')
+    f.write('f1_score: ' + str(f1_score(Y_test, Y_predict)) + '\n')
+    f.write('---------------------------------\n')
 
     # retraining
     all_disc_inputs = []
     for [cluster_input,new_input] in [[False,False],[False,True],[True,False]]:
-        disc_inputs = generate_data(model, dataset, data_config, sensitive_param, cluster_input, new_input, max_global, X, max_local, model_name, param_probability, param_probability_change_size, direction_probability, direction_probability_change_size, step_size)
+        disc_inputs = generate_data(model, dataset, data_config, sensitive_param, cluster_input, new_input, max_global, X, max_local, model_name, param_probability, param_probability_change_size, direction_probability, direction_probability_change_size, step_size, label_models)
         disc_inputs = np.array(list(disc_inputs))
         all_disc_inputs.append(disc_inputs)
-
     for disc_input_1 in all_disc_inputs:
         model_copy = copy.deepcopy(model)
         X_train_copy = copy.deepcopy(X_train)
         Y_train_copy = copy.deepcopy(Y_train)
-        X_train_copy = np.concatenate([X_train_copy, disc_input_1[:, :-1]])
-        Y_train_copy = np.concatenate([Y_train_copy, disc_input_1[:, -1]])
+        if len(disc_input_1) > 0:
+            X_train_copy = np.concatenate([X_train_copy, disc_input_1[:, :-1]])
+            Y_train_copy = np.concatenate([Y_train_copy, disc_input_1[:, -1]])
         model_copy.fit(X_train_copy, Y_train_copy)
         # performance
         Y_predict = model_copy.predict(X_test)
-        print('second performance:')
-        print('accuracy', accuracy(Y_test, Y_predict))
-        print('precision', precision(Y_test, Y_predict))
-        print('recall', recall(Y_test, Y_predict))
-        print('f1_score', f1_score(Y_test, Y_predict))
-        print()
+        f.write('重训练performance：\n')
+        f.write('accuracy: ' + str(accuracy(Y_test, Y_predict)) + '\n')
+        f.write('precision: ' + str(precision(Y_test, Y_predict)) + '\n')
+        f.write('recall: ' + str(recall(Y_test, Y_predict)) + '\n')
+        f.write('f1_score: ' + str(f1_score(Y_test, Y_predict)) + '\n')
+
+        # 表格属性
+        # ori: performance, retraining performance, ori, new, cluster
+        # new: performance, retraining performance, ori, new, cluster
+        # cluster: performance, retraining performance, ori, new, cluster
 
         for disc_input_2 in all_disc_inputs:
             total_idi = 0
@@ -397,7 +430,9 @@ def retraining_aequitas(dataset, sensitive_param, max_global, max_local, max_ite
                 result = check_for_error_condition(model_copy, data_config[dataset], inp, sensitive_param)
                 if result != int(inp[sensitive_param - 1]):
                     total_idi += 1
-            print(str(total_idi)+'/'+str(len(disc_input_2)))
+            f.write(str(total_idi) + '/' + str(len(disc_input_2))+'\n')
+        f.write('---------------------------------\n')
+    f.close()
 
 
 def main(argv=None):
@@ -411,7 +446,8 @@ def main(argv=None):
                             new_input=FLAGS.new_input,
                             cluster_input=FLAGS.cluster_input,
                             model_name=FLAGS.model_name,
-                            retraining=FLAGS.retraining)
+                            retraining=FLAGS.retraining,
+                            exp=FLAGS.exp)
     else:
         aequitas(dataset=FLAGS.dataset,
                  sensitive_param=FLAGS.sens_param,
@@ -422,20 +458,28 @@ def main(argv=None):
                  new_input=FLAGS.new_input,
                  cluster_input=FLAGS.cluster_input,
                  model_name=FLAGS.model_name,
-                 retraining=FLAGS.retraining)
+                 retraining=FLAGS.retraining,
+                 exp=FLAGS.exp)
 # census: 1 age, 8 race, 9 sex
 # bank: 1 age
 # compas: 1 sex, 2 age, 3 race
 if __name__ == '__main__':
     flags.DEFINE_string("dataset", "census", "the name of dataset")
-    flags.DEFINE_integer('sens_param', 1, 'sensitive index, index start from 1, 9 for gender, 8 for race')
-    flags.DEFINE_integer('max_global', 100, 'number of maximum samples for global search')
-    flags.DEFINE_integer('max_local', 100, 'number of maximum samples for local search')
+    flags.DEFINE_integer('sens_param', 8, 'sensitive index, index start from 1, 9 for gender, 8 for race')
+    flags.DEFINE_integer('max_global', 1000, 'number of maximum samples for global search')
+    flags.DEFINE_integer('max_local', 1000, 'number of maximum samples for local search')
     flags.DEFINE_integer('max_iter', 300, 'maximum iteration of global perturbation')
     flags.DEFINE_float('step_size', 1.0, 'step size for perturbation')
     flags.DEFINE_boolean('new_input', False, 'our new input approach')
     flags.DEFINE_boolean('cluster_input', False, 'shap & cluster')
     flags.DEFINE_string('model_name', 'LogisticRegression', 'ML Models')
-    # LogisticRegression, SVC, DecisionTreeClassifier, MLPClassifier
+    # LogisticRegression, DecisionTreeClassifier, MLPClassifier
     flags.DEFINE_boolean('retraining', True, 'retraining')
+    flags.DEFINE_string('exp', 'RQ4', 'our new input approach')
     tf.app.run()
+
+# RQ3
+# python ml_aequitas.py --dataset=census --sens_param=1 --new_input=False --cluster_input=False --model_name=LogisticRegression --exp=RQ3 --max_global=1000 --max_local=1000 --max_iter=300 --step_size=1.0 --retraining=False
+
+# RQ4
+# python ml_aequitas.py --dataset=census --sens_param=1 --model_name=LogisticRegression --exp=RQ4 --max_global=1000 --max_local=1000 --max_iter=300 --step_size=1.0 --retraining=True --new_input=False --cluster_input=False

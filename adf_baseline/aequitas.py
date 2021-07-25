@@ -136,16 +136,6 @@ class Global_Discovery(object):
 
 
 def check_for_error_condition(conf, sess, x, preds, t, sens):
-    """
-    Check whether the test case is an individual discriminatory instance
-    :param conf: the configuration of dataset
-    :param sess: TF session
-    :param x: input placeholder
-    :param preds: the model's symbolic output
-    :param t: test case
-    :param sens: the index of sensitive feature
-    :return: the value of sensitive feature
-    """
     t = np.array(t).astype("int")
     label = model_argmax(sess, x, preds, np.array([t]))
 
@@ -160,18 +150,7 @@ def check_for_error_condition(conf, sess, x, preds, t, sens):
     return t[sens - 1]
 
 
-def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_size, new_input, cluster_input, retraining):
-    """
-    The implementation of AEQUITAS_Fully_Connected
-    :param dataset: the name of testing dataset
-    :param sensitive_param: the name of testing dataset
-    :param model_path: the path of testing model
-    :param max_global: the maximum number of samples for global search
-    :param max_local: the maximum number of samples for local search
-    :param step_size: the step size of perturbation
-    :param new_input: our new input approach 
-    :return:
-    """
+def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_size, new_input, cluster_input, exp, model_name):
     data = {"census": census_data, "credit": credit_data, "bank": bank_data, "execution": execution_data, "compas":compas_data}
     data_config = {"census": census, "credit": credit, "bank": bank, "execution": execution, "compas":compas}
     params = data_config[dataset].params
@@ -196,7 +175,7 @@ def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_s
     config.gpu_options.per_process_gpu_memory_fraction = 0.8
     sess = tf.Session(config=config)
     saver = tf.train.Saver()
-    saver.restore(sess, model_path+FLAGS.dataset+"/"+ str(FLAGS.sens_param) +"/test.model")
+    saver.restore(sess, model_path+dataset+"/"+ str(sensitive_param) +"/test.model")
 
     # store the result of fairness testing
     global_disc_inputs = set()
@@ -241,27 +220,25 @@ def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_s
                                             param_probability_change_size, direction_probability,
                                             direction_probability_change_size, step_size)
 
-    if FLAGS.cluster_input:
-        init_sample = np.load('../results/' + dataset + '/' + str(sensitive_param) + '/cluster_' + FLAGS.model_config + '_init_samples.npy')
+    if cluster_input:
+        init_sample = np.load('../results/' + dataset + '/' + str(sensitive_param) + '/cluster_' + model_name + '_init_samples.npy')
         length = min(max_global, len(init_sample))
-        print(length)
-        if length < 100:
-            exit()
-    elif FLAGS.new_input:
+        inputs_way = 'cluster'
+    elif new_input:
         init_sample = np.load('../results/'+dataset+'/'+ str(sensitive_param) + '/init_samples.npy')
-        # init_index = np.load('../results/'+dataset+'/'+ str(sensitive_param) + '/init_index.npy')
         length = min(max_global, len(init_sample))
-        print(length)
+        inputs_way = 'new'
     else:
         length = min(max_global, len(X))
-        print(length)
+        inputs_way = 'ori'
+
     
     value_list = []
     for i in range(length):
         # global generation
-        if FLAGS.cluster_input:
+        if cluster_input:
             inp = list(init_sample[i])
-        elif FLAGS.new_input:
+        elif new_input:
             inp = list(init_sample[i])
         else:
             inp = global_discovery.__call__(initial_input)
@@ -269,13 +246,11 @@ def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_s
         temp = temp[:sensitive_param - 1] + temp[sensitive_param:]
         tot_inputs.add(tuple(temp))
         result = check_for_error_condition(data_config[dataset], sess, x, preds, inp, sensitive_param)
-        ##marvin adds##
         if result == inp[sensitive_param - 1] and (tuple(temp) not in global_miss):
             global_miss_list.append(temp)
             global_miss.add(tuple(temp))
-        ###############
         # RQ1
-        if FLAGS.exp == 'RQ1':
+        if exp == 'RQ1':
             continue
         # if get an individual discriminatory instance
         if result != inp[sensitive_param - 1] and (tuple(temp) not in global_disc_inputs) and (
@@ -285,42 +260,32 @@ def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_s
             value_list.append([inp[sensitive_param - 1], result])
 
             # local generation
-            basinhopping(evaluate_local, inp, stepsize=1.0, take_step=local_perturbation, minimizer_kwargs=minimizer,
-                         niter=max_local)
-            print(len(global_disc_inputs), len(local_disc_inputs),
-                  "Percentage discriminatory inputs of local search- " + str(
-                      float(len(local_disc_inputs)) / float(len(tot_inputs)) * 100))
+            basinhopping(evaluate_local, inp, stepsize=1.0, take_step=local_perturbation, minimizer_kwargs=minimizer, niter=max_local)
+            print(len(global_disc_inputs), len(local_disc_inputs), "Percentage discriminatory inputs of local search- " + str( float(len(local_disc_inputs)) / float(len(tot_inputs)) * 100))
 
     # RQ1
-    if FLAGS.exp == 'RQ1':
+    if exp == 'RQ1':
         print(max_global, max_global - len(global_miss_list))
         exit()
-
-    # create the folder for storing the fairness testing result
-    if not os.path.exists('../results/'):
-        os.makedirs('../results/')
-    if not os.path.exists('../results/' + dataset + '/'):
-        os.makedirs('../results/' + dataset + '/')
-    if not os.path.exists('../results/'+ dataset + '/'+ str(sensitive_param) + '/'):
-        os.makedirs('../results/' + dataset + '/'+ str(sensitive_param) + '/')
-
-    np.save('../results/'+dataset+'/'+ str(sensitive_param) + '/global_miss_aequitas.npy', np.array(global_miss_list))
-    np.save('../results/'+dataset+'/'+ str(sensitive_param) + '/global_init_aequitas.npy', np.array(global_disc_inputs_list))
-    print("Total missing inputs of global search - " + str(len(global_miss_list)))
-    print("Total init inputs of global search - " + str(len(global_disc_inputs_list)))
-    
-    # storing the fairness testing result
-    np.save('../results/'+dataset+'/'+ str(sensitive_param) + '/global_samples_aequitas.npy', np.array(global_disc_inputs_list))
-    np.save('../results/'+dataset+'/'+ str(sensitive_param) + '/disc_value_aequitas.npy', np.array(value_list))
-    np.save('../results/' + dataset + '/' + str(sensitive_param) + '/local_samples_aequitas.npy', np.array(local_disc_inputs_list))
-
+    # # create the folder for storing the fairness testing result
+    # if not os.path.exists('../results/'):
+    #     os.makedirs('../results/')
+    # if not os.path.exists('../results/' + exp + '/'):
+    #     os.makedirs('../results/' + exp + '/')
+    # if not os.path.exists('../results/' + exp + '/AEQU/'):
+    #     os.makedirs('../results/' + exp + '/AEQU/')
+    #
+    # f = open('../results/' + exp + '/AEQU/'+model_name+'_'+dataset+'_'+str(sensitive_param)+'_'+inputs_way+'.txt', 'w',encoding='utf-8', newline='')
+    # f.write('global,local\n')
+    # f.write(str(len(global_disc_inputs))+','+str(len(local_disc_inputs))+'\n')
+    # f.close()
     # print the overview information of result
     print("Total Inputs are " + str(len(tot_inputs)))
     print("Total discriminatory inputs of global search - " + str(len(global_disc_inputs)))
     print("Total discriminatory inputs of local search - " + str(len(local_disc_inputs)))
-    print(FLAGS.dataset, FLAGS.sens_param)
-    if FLAGS.exp == 'RQ2':
-        print(print(FLAGS.new_input))
+    print(dataset, sensitive_param)
+    if exp == 'RQ2':
+        print(print(new_input))
 
 
 
@@ -333,22 +298,22 @@ def main(argv=None):
              step_size=FLAGS.step_size,
              new_input=FLAGS.new_input,
              cluster_input=FLAGS.cluster_input,
-             retraining=FLAGS.retraining)
+             exp=FLAGS.exp,
+             model_name=FLAGS.model_name)
 
 # census: 1 age, 8 race, 9 sex
 # bank: 1 age
 # compas: 2 age, 3 race
 if __name__ == '__main__':
     flags.DEFINE_string("dataset", "census", "the name of dataset")
-    flags.DEFINE_integer('sens_param', 9, 'sensitive index, index start from 1, 9 for gender, 8 for race')
+    flags.DEFINE_integer('sens_param', 1, 'sensitive index, index start from 1, 9 for gender, 8 for race')
     flags.DEFINE_string('model_path', '../models/', 'the path for testing model')
-    flags.DEFINE_integer('max_global', 100, 'number of maximum samples for global search')
-    flags.DEFINE_integer('max_local', 100, 'number of maximum samples for local search')
+    flags.DEFINE_integer('max_global', 1, 'number of maximum samples for global search')
+    flags.DEFINE_integer('max_local', 1, 'number of maximum samples for local search')
     flags.DEFINE_float('step_size', 1.0, 'step size for perturbation')
     flags.DEFINE_boolean('new_input', False, 'our new input approach')
-    flags.DEFINE_boolean('cluster_input', False, 'shap & cluster')
-    flags.DEFINE_string('exp', 'RQ4', 'our new input approach')
-    flags.DEFINE_string('model_config', 'LogisticRegression', 'ML Models')
-    # LogisticRegression, SVC, DecisionTreeClassifier, MLPClassifier
-    flags.DEFINE_boolean('retraining', True, 'retraining')
+    flags.DEFINE_boolean('cluster_input', True, 'shap & cluster')
+    flags.DEFINE_string('exp', 'RQ3', 'our new input approach')
+    flags.DEFINE_string('model_name', 'LogisticRegression', 'ML Models')
+    # LogisticRegression, DecisionTreeClassifier, MLPClassifier
     tf.app.run()

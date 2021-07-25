@@ -194,7 +194,7 @@ def gen_arguments(conf):
     return arguments
 
 
-def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, limit, new_input, retraining):
+def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, limit, new_input):
     """
     The implementation of symbolic generation
     :param dataset: the name of dataset
@@ -350,26 +350,6 @@ def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, limit
     if FLAGS.exp == 'RQ1':
         print(limit, found_number)
         exit()
-    # create the folder for storing the fairness testing result
-    if not os.path.exists('../results/'):
-        os.makedirs('../results/')
-    if not os.path.exists('../results/' + dataset + '/'):
-        os.makedirs('../results/' + dataset + '/')
-    if not os.path.exists('../results/'+ dataset + '/'+ str(sensitive_param) + '/'):
-        os.makedirs('../results/' + dataset + '/'+ str(sensitive_param) + '/')
-
-    np.save('../results/' + dataset + '/' + str(sensitive_param) + '/global_miss_symbolic.npy',
-            np.array(global_miss_list))
-    np.save('../results/' + dataset + '/' + str(sensitive_param) + '/global_init_symbolic.npy',
-            np.array(global_init_list))
-    print("Total missing inputs of global search - " + str(len(global_miss_list)))
-    print("Total init inputs of global search - " + str(len(global_init_list)))
-    
-    # storing the fairness testing result
-    np.save('../results/' + dataset + '/' + str(sensitive_param) + '/global_samples_symbolic.npy',
-            np.array(global_disc_inputs_list))
-    np.save('../results/' + dataset + '/' + str(sensitive_param) + '/local_samples_symbolic.npy',
-            np.array(local_disc_inputs_list))
 
     # print the overview information of result
     print("Total Inputs are " + str(len(tot_inputs)))
@@ -386,8 +366,7 @@ def main(argv=None):
                         model_path=FLAGS.model_path,
                         cluster_num=FLAGS.cluster_num,
                         limit=FLAGS.sample_limit,
-                        new_input=FLAGS.new_input,
-                        retraining=FLAGS.retraining)
+                        new_input=FLAGS.new_input)
 
 # census: 1 age, 8 race, 9 sex
 # bank: 1 age
@@ -403,5 +382,4 @@ if __name__ == '__main__':
     flags.DEFINE_string('exp', 'RQ4', 'our new input approach')
     flags.DEFINE_string('model_config', 'DecisionTreeClassifier', 'ML Models')
     # LogisticRegression, SVC, DecisionTreeClassifier, MLPClassifier
-    flags.DEFINE_boolean('retraining', True, 'retraining')
     tf.app.run()
