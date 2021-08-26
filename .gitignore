@@ -1,12 +1,12 @@
-fairness-AEQ-SG-ADF/.ipynb_checkpoints*
-fairness-AEQ-SG-ADF/.vscode*
-fairness-AEQ-SG-ADF/*.pyc
-fairness-AEQ-SG-ADF/.idea
-fairness-AEQ-SG-ADF/__pycache__
-fairness-AEQ-SG-ADF/.DS_Store
-fairness-AEQ-SG-ADF/datasets
-fairness-AEQ-SG-ADF/models/.idea
-fairness-AEQ-SG-ADF/results
+.ipynb_checkpoints*
+.vscode*
+*.pyc
+.idea
+__pycache__
+.DS_Store
+datasets
+models/.idea
+results
 
 EIDIG/.ipynb_checkpoints*
 EIDIG/.vscode*
