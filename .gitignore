@@ -7,13 +7,3 @@ __pycache__
 datasets
 models/.idea
 results
-
-EIDIG/.ipynb_checkpoints*
-EIDIG/.vscode*
-EIDIG/*.pyc
-EIDIG/.idea
-EIDIG/__pycache__
-EIDIG/.DS_Store
-EIDIG/datasets
-EIDIG/models/.idea
-EIDIG/results
