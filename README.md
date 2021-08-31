@@ -1,16 +1,16 @@
-# 1 Getting Started
+# Getting Started
 
-#### 1.1 Environment
+## Environment
 
 Python3.6 + Tensorflow1.11 + scikit-learn0.20 are recommended.
 The following packages are also required: numpy, pandas, joblib.
 
-#### 1.2 A Small Example
+## A Small Example
 
 We provide a small example. In the corresponding file directory, enter in the terminal 'python example.py'.
 
-#### 1.3 Parameter Description in Example
-#####  1.3.1 iandd
+## Parameter Description in Example
+### iandd
 1. (dataset,sensitive_param): The name of the dataset and the ordinal number of the sensitive attributes.
 	a. ('census', 1)
 	b. ('census', 8)
@@ -28,7 +28,7 @@ We provide a small example. In the corresponding file directory, enter in the te
 	d. 'SVC'
 	e. 'NN'
 
-#####  1.3.2 aequitas
+### aequitas
 1. (dataset,sensitive_param): The name of the dataset and the ordinal number of the sensitive attributes.
 	a. ('census', 1)
 	b. ('census', 8)
@@ -48,7 +48,7 @@ We provide a small example. In the corresponding file directory, enter in the te
 	d. 'SVC'
 	e. 'NN'
 
-##### 1.3.3 retraining_testing
+### retraining_testing
 1. (dataset,sensitive_param): The name of the dataset and the ordinal number of the sensitive attributes.
 	a. ('census', 1)
 	b. ('census', 8)
