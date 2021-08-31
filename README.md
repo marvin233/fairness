@@ -2,7 +2,7 @@
 
 ## Environment
 
-Python3.6 + Tensorflow1.11 + scikit-learn0.20 are recommended. The following packages are also required: numpy, pandas, joblib. The specific parameters are in the file 'requirement.txt'.
+Python3.6 + Tensorflow1.11 + scikit-learn0.20 are recommended. The following packages are also required: numpy, pandas, joblib. The specific parameters are in the file 'requirements.txt'.
 
 ## A Small Example
 
