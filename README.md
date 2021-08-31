@@ -5,7 +5,7 @@ Python 3.6, Tensorflow 1.11, and scikit-learn 0.20 are suggested. The packages n
 
 ## A Demo
 
-We provide a demo. In the terminal, ```python example.py``` in the corresponding file directory.
+We provide a demo. Please run `python example.py` in the corresponding file directory.
 
 ## Parameter Description in the Demo
 ### iandd
@@ -27,3 +27,6 @@ We provide a demo. In the terminal, ```python example.py``` in the corresponding
 2. `max_iter`: Number of iterations of training.
 3. `approach_name`: Approach name. Optional parameters: `'AEQ'`, `'SG'`, `'ADF'`, `'EIDIG'`.
 4. `model_name`: Model name. Optional parameters: `'LogisticRegression'`, `'DecisionTreeClassifier'`, `'MLPClassifier'`, `'SVC'`, `'NN'`.
+
+## Citation
+Please cite our paper: tba
