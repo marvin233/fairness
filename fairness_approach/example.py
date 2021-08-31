@@ -1,12 +1,13 @@
 # AEQ., LogisticRegression, census, age
 
 # initial idi
-from fairness_approach.init import init
-init(dataset='census', sensitive_param=1, max_iter=30, sample_limit=100, model_name='LogisticRegression')
+from iandd import iandd
+iandd(dataset='census', sensitive_param=1, max_iter=30, sample_limit=100, model_name='LogisticRegression')
+
 
 
 # idi number
-from fairness_approach.AEQ import aequitas
+from AEQ import aequitas
 aequitas(dataset='census', sensitive_param=1, max_global=100, max_local=100, max_iter=30, step_size=1.0, model_name='LogisticRegression')
 
 # original
@@ -27,7 +28,7 @@ aequitas(dataset='census', sensitive_param=1, max_global=100, max_local=100, max
 
 
 # retraining & testing
-from fairness_approach.retraining_testing import retraining_testing
+from retraining_testing import retraining_testing
 retraining_testing(dataset='census', sensitive_param=1, max_iter=30, approach_name='AEQ', model_name='LogisticRegression')
 
 # F1-Score: 0.8808456420178378
