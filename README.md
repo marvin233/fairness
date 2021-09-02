@@ -7,15 +7,15 @@ Python 3.6, Tensorflow 1.11, and scikit-learn 0.20 are suggested. The packages n
 
 We provide a demo. Please run `python example.py` in the corresponding file directory.
 
-|Dataset|Index|Protected Attribute|Link|
-|----|----|----|----|
-|[Census]https://archive.ics.uci.edu/ml/datasets/adult |1|age||
-||8|race||
-||9|sex||
-|Compas|1|sex|https://github.com/propublica/compas-analysis|
-||2|age||
-||3|race||
-|Bank|1|age|https://archive.ics.uci.edu/ml/datasets/bank+marketing|
+|Dataset|Index|Protected Attribute|
+|----|----|----|
+|[Census](https://archive.ics.uci.edu/ml/datasets/adult) |1|age|
+||8|race|
+||9|sex|
+|[Compas](https://github.com/propublica/compas-analysis)|1|sex|
+||2|age|
+||3|race|
+|[Bank](https://archive.ics.uci.edu/ml/datasets/bank+marketing)|1|age|
 
 ## Parameter Description in the Demo
 ### iandd
