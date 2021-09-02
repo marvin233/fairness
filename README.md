@@ -7,6 +7,16 @@ Python 3.6, Tensorflow 1.11, and scikit-learn 0.20 are suggested. The packages n
 
 We provide a demo. Please run `python example.py` in the corresponding file directory.
 
+|Dataset|Protected Attribute Index|Protected Attribute|Link|
+|----|----|----|----|
+|census|1|age|https://archive.ics.uci.edu/ml/datasets/adult|
+||8|race||
+||9|sex||
+|compas|1|sex|https://github.com/propublica/compas-analysis|
+||2|age||
+||3|race||
+|bank|1|age|https://archive.ics.uci.edu/ml/datasets/bank+marketing|
+
 ## Parameter Description in the Demo
 ### iandd
 1. `(dataset,sensitive_param)`: The name of the dataset and the index of the protected attribute. Optional parameters: ` ('census', 1)`, `('census', 8)`, ` ('census', 9)`, `('compas', 1)`, `('compas', 2)`, `('compas', 3)`, `('bank', 1)`.
