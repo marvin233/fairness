@@ -3,10 +3,7 @@
 ## Environment
 Python 3.6, Tensorflow 1.11, and scikit-learn 0.20 are suggested. The packages numpy, pandas, and joblib are also required. Please refer to `requirements.txt`.
 
-## A Demo
-
-We provide a demo. Please run `python example.py` in the corresponding file directory.
-
+## Datasets
 |Dataset|Index|Protected Attribute|
 |----|----|----|
 |[Census](https://archive.ics.uci.edu/ml/datasets/adult) |1|age|
@@ -16,6 +13,9 @@ We provide a demo. Please run `python example.py` in the corresponding file dire
 ||2|age|
 ||3|race|
 |[Bank](https://archive.ics.uci.edu/ml/datasets/bank+marketing)|1|age|
+
+## A Demo
+We provide a demo. Please run `python example.py` in the corresponding file directory.
 
 ## Parameter Description in the Demo
 ### iandd
@@ -39,4 +39,4 @@ We provide a demo. Please run `python example.py` in the corresponding file dire
 4. `model_name`: Model name. Optional parameters: `'LogisticRegression'`, `'DecisionTreeClassifier'`, `'MLPClassifier'`, `'SVC'`, `'NN'`.
 
 ## Citation
-Please cite our paper: tba
+Please cite our paper: TBA
