@@ -9,7 +9,7 @@ We provide a demo. Please run `python example.py` in the corresponding file dire
 
 |Dataset|Index|Protected Attribute|Link|
 |----|----|----|----|
-|Census|1|age|https://archive.ics.uci.edu/ml/datasets/adult|
+|[Census]https://archive.ics.uci.edu/ml/datasets/adult |1|age||
 ||8|race||
 ||9|sex||
 |Compas|1|sex|https://github.com/propublica/compas-analysis|
