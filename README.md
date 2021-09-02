@@ -14,7 +14,7 @@ Python 3.6, Tensorflow 1.11, and scikit-learn 0.20 are suggested.
 ||3|race|
 |[Bank](https://archive.ics.uci.edu/ml/datasets/bank+marketing)|1|age|
 
-## A Demo
+## Demo
 We provide a demo. Please run `python example.py` in the corresponding file directory.
 
 ## Parameter Description in the Demo
