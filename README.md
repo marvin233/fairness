@@ -1,7 +1,7 @@
 # Getting Started
 
 ## Environment
-Python 3.6, Tensorflow 1.11, and scikit-learn 0.20 are suggested. The packages numpy, pandas, and joblib are also required. Please refer to `requirements.txt`.
+Python 3.6, Tensorflow 1.11, and scikit-learn 0.20 are suggested. 
 
 ## Datasets
 |Dataset|Index|Protected Attribute|
